@@ -7,6 +7,7 @@ import { getDb } from '../../db/index.js';
 import { upsertKnowledgeEntry } from '../../db/knowledge.js';
 import { generateId } from '../../ids.js';
 import { slugify } from '../../utils.js';
+import { c } from '../../colors.js';
 
 interface NoteNewOptions {
   context?: string;
@@ -18,7 +19,7 @@ interface NoteNewOptions {
 export function runNoteNew(title: string, options: NoteNewOptions): void {
   const editor = process.env.EDITOR;
   if (!editor) {
-    process.stderr.write('No $EDITOR set. Export EDITOR=<your editor> and try again.\n');
+    process.stderr.write(c.red('No $EDITOR set. Export EDITOR=<your editor> and try again.\n'));
     process.exit(1);
   }
 
@@ -31,7 +32,7 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
   // Validate context
   const ctx = db.prepare(`SELECT id FROM contexts WHERE id = ?`).get(contextId);
   if (!ctx) {
-    process.stderr.write(`Context '${contextId}' does not exist.\n`);
+    process.stderr.write(c.red(`Context '${contextId}' does not exist.\n`));
     db.close();
     process.exit(1);
   }
@@ -40,7 +41,7 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
   if (options.task) {
     const t = db.prepare(`SELECT id FROM tasks WHERE id = ?`).get(options.task);
     if (!t) {
-      process.stderr.write(`Task '${options.task}' not found.\n`);
+      process.stderr.write(c.red(`Task '${options.task}' not found.\n`));
       db.close();
       process.exit(1);
     }
@@ -70,7 +71,7 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
   try {
     execSync(`${editor} ${filePath}`, { stdio: 'inherit' });
   } catch {
-    process.stderr.write('Editor exited with an error.\n');
+    process.stderr.write(c.red('Editor exited with an error.\n'));
     db.close();
     process.exit(1);
   }
@@ -101,5 +102,5 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
   })();
 
   db.close();
-  process.stdout.write(`Created ${id}: "${title}" → ${filePath}\n`);
+  process.stdout.write(c.green(`Created ${id}: "${title}" → ${filePath}\n`));
 }

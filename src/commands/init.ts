@@ -9,6 +9,7 @@ import {
   saveConfig,
 } from '../config.js';
 import { getDb } from '../db/index.js';
+import { c } from '../colors.js';
 
 function now(): string {
   return new Date().toISOString();
@@ -67,10 +68,10 @@ export function runInit(options: { config?: string }): void {
 
   // Step 8: Print confirmation
   process.stdout.write(
-    `Initialized Saboteur workspace.\n` +
-      `  DB:     ${dbPath}\n` +
-      `  Notes:  ${notesPath}\n` +
-      `  Config: ${configPath}\n`,
+    c.green(`Initialized Saboteur workspace.\n`) +
+      `  DB:     ${c.muted(dbPath)}\n` +
+      `  Notes:  ${c.muted(notesPath)}\n` +
+      `  Config: ${c.muted(configPath)}\n`,
   );
 }
 

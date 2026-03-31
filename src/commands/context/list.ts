@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { listContexts } from '../../db/contexts.js';
+import { c } from '../../colors.js';
 
 export function runContextList(options: { config?: string }): void {
   const configPath = resolvePath(options.config ?? DEFAULT_CONFIG_PATH);
@@ -9,14 +10,18 @@ export function runContextList(options: { config?: string }): void {
   const contexts = listContexts(db);
   db.close();
 
-  const header = `${'CONTEXT'.padEnd(20)} ${'TASKS'.padEnd(8)} NOTES`;
-  process.stdout.write(header + '\n');
-  process.stdout.write('-'.repeat(header.length) + '\n');
+  const headerText = `${'CONTEXT'.padEnd(20)} ${'TASKS'.padEnd(8)} NOTES`;
+  process.stdout.write(c.label(headerText) + '\n');
+  process.stdout.write(c.border('-'.repeat(headerText.length)) + '\n');
 
   for (const ctx of contexts) {
-    const active = ctx.id === config.active_context ? ' *' : '';
-    process.stdout.write(
-      `${(ctx.id + active).padEnd(20)} ${String(ctx.task_count).padEnd(8)} ${ctx.note_count}\n`,
-    );
+    const isActive = ctx.id === config.active_context;
+    const slug = isActive ? ctx.id + ' *' : ctx.id;
+    const counts = `${String(ctx.task_count).padEnd(8)} ${ctx.note_count}`;
+    if (isActive) {
+      process.stdout.write(`${c.cyan(slug.padEnd(20))} ${c.muted(counts)}\n`);
+    } else {
+      process.stdout.write(`${slug.padEnd(20)} ${c.muted(counts)}\n`);
+    }
   }
 }

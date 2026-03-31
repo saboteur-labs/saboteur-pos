@@ -2,6 +2,7 @@ import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getTask } from '../../db/tasks.js';
 import { daysSince, formatDate } from '../../utils.js';
+import { c, stateColor, priorityBadge, energyBadge } from '../../colors.js';
 
 export function runTaskView(id: string, options: { config?: string }): void {
   const configPath = resolvePath(options.config ?? DEFAULT_CONFIG_PATH);
@@ -10,7 +11,7 @@ export function runTaskView(id: string, options: { config?: string }): void {
 
   const task = getTask(db, id);
   if (!task) {
-    process.stderr.write(`Task '${id}' not found.\n`);
+    process.stderr.write(c.red(`Task '${id}' not found.\n`));
     db.close();
     process.exit(1);
   }
@@ -45,24 +46,24 @@ export function runTaskView(id: string, options: { config?: string }): void {
   const days = daysSince(task.updated_at);
   const hr = '─'.repeat(40);
 
-  process.stdout.write(`${task.id} — ${task.title}\n`);
-  process.stdout.write(`${hr}\n`);
-  process.stdout.write(`State:    ${task.state} (${days} day${days === 1 ? '' : 's'})\n`);
-  process.stdout.write(`Context:  ${task.context_id}\n`);
-  process.stdout.write(`Priority: ${task.priority}\n`);
-  process.stdout.write(`Energy:   ${task.energy ?? '-'}\n`);
-  process.stdout.write(`Effort:   ${task.effort ?? '-'}\n`);
-  process.stdout.write(`Repo:     ${task.repo ?? '-'}\n`);
-  process.stdout.write(`Branch:   ${task.branch ?? '-'}\n`);
-  process.stdout.write(`Note:     ${noteLine}\n`);
+  process.stdout.write(`${c.muted(task.id)} — ${stateColor(task.state, task.title)}\n`);
+  process.stdout.write(`${c.border(hr)}\n`);
+  process.stdout.write(`${c.label('State:   ')} ${stateColor(task.state, task.state)} (${days} day${days === 1 ? '' : 's'})\n`);
+  process.stdout.write(`${c.label('Context: ')} ${c.cyan(task.context_id)}\n`);
+  process.stdout.write(`${c.label('Priority:')} ${priorityBadge(task.priority, task.priority)}\n`);
+  process.stdout.write(`${c.label('Energy:  ')} ${energyBadge(task.energy, task.energy ?? '-')}\n`);
+  process.stdout.write(`${c.label('Effort:  ')} ${task.effort ?? '-'}\n`);
+  process.stdout.write(`${c.label('Repo:    ')} ${task.repo ?? '-'}\n`);
+  process.stdout.write(`${c.label('Branch:  ')} ${task.branch ?? '-'}\n`);
+  process.stdout.write(`${c.label('Note:    ')} ${noteLine}\n`);
   process.stdout.write(`\n`);
-  process.stdout.write(`Blocks:     ${blocksLine}\n`);
-  process.stdout.write(`Blocked by: ${blockedByLine}\n`);
+  process.stdout.write(`${c.label('Blocks:    ')} ${blocksLine}\n`);
+  process.stdout.write(`${c.label('Blocked by:')} ${blockedByLine}\n`);
   process.stdout.write(`\n`);
-  process.stdout.write(`State history:\n`);
+  process.stdout.write(`${c.label('State history:')}\n`);
   for (const entry of task.state_history) {
     const ts = formatDate(entry.timestamp) + ' ' + entry.timestamp.slice(11, 16);
     const reason = entry.reason ? `  (${entry.reason})` : '';
-    process.stdout.write(`  ${entry.state.padEnd(10)} → ${ts}${reason}\n`);
+    process.stdout.write(`  ${stateColor(entry.state, entry.state.padEnd(10))} → ${c.muted(ts)}${reason}\n`);
   }
 }

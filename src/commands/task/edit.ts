@@ -5,6 +5,7 @@ import { join } from 'path';
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getTask, updateTaskFields } from '../../db/tasks.js';
+import { c } from '../../colors.js';
 
 const YAML_HEADER = `# Editable fields: title, priority, energy, effort, repo, branch
 # priority: critical | high | normal | low
@@ -45,7 +46,7 @@ function parseYamlFields(content: string): Record<string, string> {
 export function runTaskEdit(id: string, options: { config?: string }): void {
   const editor = process.env.EDITOR;
   if (!editor) {
-    process.stderr.write('No $EDITOR set. Export EDITOR=<your editor> and try again.\n');
+    process.stderr.write(c.red('No $EDITOR set. Export EDITOR=<your editor> and try again.\n'));
     process.exit(1);
   }
 
@@ -55,7 +56,7 @@ export function runTaskEdit(id: string, options: { config?: string }): void {
 
   const task = getTask(db, id);
   if (!task) {
-    process.stderr.write(`Task '${id}' not found.\n`);
+    process.stderr.write(c.red(`Task '${id}' not found.\n`));
     db.close();
     process.exit(1);
   }
@@ -68,7 +69,7 @@ export function runTaskEdit(id: string, options: { config?: string }): void {
   try {
     execSync(`${editor} ${tmpFile}`, { stdio: 'inherit' });
   } catch {
-    process.stderr.write('Editor exited with an error.\n');
+    process.stderr.write(c.red('Editor exited with an error.\n'));
     unlinkSync(tmpFile);
     db.close();
     process.exit(1);
@@ -83,17 +84,17 @@ export function runTaskEdit(id: string, options: { config?: string }): void {
   const validEfforts = ['xs', 's', 'm', 'l', 'xl', ''];
 
   if (fields.priority && !validPriorities.includes(fields.priority)) {
-    process.stderr.write(`Invalid priority '${fields.priority}'. Valid: ${validPriorities.join(', ')}.\n`);
+    process.stderr.write(c.red(`Invalid priority '${fields.priority}'. Valid: ${validPriorities.join(', ')}.\n`));
     db.close();
     process.exit(1);
   }
   if ('energy' in fields && !validEnergies.includes(fields.energy)) {
-    process.stderr.write(`Invalid energy '${fields.energy}'. Valid: deep, shallow, admin.\n`);
+    process.stderr.write(c.red(`Invalid energy '${fields.energy}'. Valid: deep, shallow, admin.\n`));
     db.close();
     process.exit(1);
   }
   if ('effort' in fields && !validEfforts.includes(fields.effort)) {
-    process.stderr.write(`Invalid effort '${fields.effort}'. Valid: xs, s, m, l, xl.\n`);
+    process.stderr.write(c.red(`Invalid effort '${fields.effort}'. Valid: xs, s, m, l, xl.\n`));
     db.close();
     process.exit(1);
   }
@@ -108,5 +109,5 @@ export function runTaskEdit(id: string, options: { config?: string }): void {
   });
 
   db.close();
-  process.stdout.write(`Updated task ${id}.\n`);
+  process.stdout.write(c.green(`Updated task ${id}.\n`));
 }

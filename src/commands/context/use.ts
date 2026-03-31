@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath, saveConfig } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getContext } from '../../db/contexts.js';
+import { c } from '../../colors.js';
 
 export function runContextUse(slug: string, options: { config?: string }): void {
   const configPath = resolvePath(options.config ?? DEFAULT_CONFIG_PATH);
@@ -12,12 +13,12 @@ export function runContextUse(slug: string, options: { config?: string }): void 
 
   if (!ctx) {
     process.stderr.write(
-      `Context '${slug}' does not exist. Run 'sab context list' to see available contexts.\n`,
+      c.red(`Context '${slug}' does not exist. Run 'sab context list' to see available contexts.\n`),
     );
     process.exit(1);
   }
 
   config.active_context = slug;
   saveConfig(config, configPath);
-  process.stdout.write(`Active context: ${slug}\n`);
+  process.stdout.write(`Active context: ${c.cyan(slug)}\n`);
 }

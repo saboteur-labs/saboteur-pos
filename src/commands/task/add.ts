@@ -2,6 +2,7 @@ import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { createTask } from '../../db/tasks.js';
 import type { Task } from '../../db/tasks.js';
+import { c } from '../../colors.js';
 
 interface AddOptions {
   context?: string;
@@ -14,7 +15,7 @@ interface AddOptions {
 
 export function runTaskAdd(title: string, options: AddOptions): void {
   if (!title || !title.trim()) {
-    process.stderr.write('Title is required.\n');
+    process.stderr.write(c.red('Title is required.\n'));
     process.exit(1);
   }
 
@@ -28,7 +29,7 @@ export function runTaskAdd(title: string, options: AddOptions): void {
   const ctx = db.prepare(`SELECT id FROM contexts WHERE id = ?`).get(contextId);
   if (!ctx) {
     process.stderr.write(
-      `Context '${contextId}' does not exist. Run 'sab context list' to see available contexts.\n`,
+      c.red(`Context '${contextId}' does not exist. Run 'sab context list' to see available contexts.\n`),
     );
     db.close();
     process.exit(1);
@@ -44,5 +45,5 @@ export function runTaskAdd(title: string, options: AddOptions): void {
   });
 
   db.close();
-  process.stdout.write(`Created task ${task.id}: "${task.title}"\n`);
+  process.stdout.write(c.green(`Created task ${task.id}: "${task.title}"\n`));
 }

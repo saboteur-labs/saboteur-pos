@@ -3,6 +3,7 @@ import { getDb } from '../../db/index.js';
 import { listKnowledgeEntries } from '../../db/knowledge.js';
 import { incrementalSync } from '../../sync.js';
 import { formatDate } from '../../utils.js';
+import { c } from '../../colors.js';
 
 interface NoteListOptions {
   view?: string;
@@ -33,18 +34,18 @@ export function runNoteList(options: NoteListOptions): void {
     return;
   }
 
-  const header = `${'ID'.padEnd(14)} ${'TITLE'.padEnd(30)} ${'TAGS'.padEnd(20)} ${'TASK'.padEnd(14)} UPDATED`;
-  process.stdout.write(header + '\n');
-  process.stdout.write('-'.repeat(header.length) + '\n');
+  const headerText = `${'ID'.padEnd(14)} ${'TITLE'.padEnd(30)} ${'TAGS'.padEnd(20)} ${'TASK'.padEnd(14)} UPDATED`;
+  process.stdout.write(c.label(headerText) + '\n');
+  process.stdout.write(c.border('-'.repeat(headerText.length)) + '\n');
 
   for (const entry of entries) {
     const tags = entry.tags.join(', ') || '-';
     process.stdout.write(
-      `${(entry.id ?? '-').padEnd(14)} ` +
+      `${c.muted((entry.id ?? '-').padEnd(14))} ` +
         `${(entry.title ?? '-').slice(0, 30).padEnd(30)} ` +
-        `${tags.slice(0, 20).padEnd(20)} ` +
-        `${(entry.task_id ?? '-').padEnd(14)} ` +
-        `${formatDate(entry.updated_at)}\n`,
+        `${c.muted(tags.slice(0, 20).padEnd(20))} ` +
+        `${c.muted((entry.task_id ?? '-').padEnd(14))} ` +
+        `${c.muted(formatDate(entry.updated_at))}\n`,
     );
   }
 }

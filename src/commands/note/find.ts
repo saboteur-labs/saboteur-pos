@@ -3,6 +3,7 @@ import { getDb } from '../../db/index.js';
 import { listKnowledgeEntries } from '../../db/knowledge.js';
 import { incrementalSync } from '../../sync.js';
 import { formatDate } from '../../utils.js';
+import { c } from '../../colors.js';
 
 interface NoteFindOptions {
   tag?: string;
@@ -14,7 +15,7 @@ interface NoteFindOptions {
 
 export function runNoteFind(options: NoteFindOptions): void {
   if (!options.tag && !options.task) {
-    process.stderr.write('Specify at least --tag <tag> or --task <id>.\n');
+    process.stderr.write(c.red('Specify at least --tag <tag> or --task <id>.\n'));
     process.exit(1);
   }
 
@@ -39,12 +40,12 @@ export function runNoteFind(options: NoteFindOptions): void {
     return;
   }
 
-  const header = `${'ID'.padEnd(14)} ${'TITLE'.padEnd(30)} UPDATED`;
-  process.stdout.write(header + '\n');
-  process.stdout.write('-'.repeat(header.length) + '\n');
+  const headerText = `${'ID'.padEnd(14)} ${'TITLE'.padEnd(30)} UPDATED`;
+  process.stdout.write(c.label(headerText) + '\n');
+  process.stdout.write(c.border('-'.repeat(headerText.length)) + '\n');
   for (const entry of entries) {
     process.stdout.write(
-      `${(entry.id ?? '-').padEnd(14)} ${(entry.title ?? '-').slice(0, 30).padEnd(30)} ${formatDate(entry.updated_at)}\n`,
+      `${c.muted((entry.id ?? '-').padEnd(14))} ${(entry.title ?? '-').slice(0, 30).padEnd(30)} ${c.muted(formatDate(entry.updated_at))}\n`,
     );
   }
 }

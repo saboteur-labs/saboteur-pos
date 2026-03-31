@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { deleteContext } from '../../db/contexts.js';
+import { c } from '../../colors.js';
 
 interface DeleteOptions {
   reassign?: string;
@@ -30,7 +31,7 @@ export function runContextDelete(slug: string, options: DeleteOptions): void {
       );
     }
   } catch (err) {
-    process.stderr.write(`${(err as Error).message}\n`);
+    process.stderr.write(c.red(`${(err as Error).message}\n`));
     db.close();
     process.exit(1);
   }

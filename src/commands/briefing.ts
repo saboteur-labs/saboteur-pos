@@ -3,6 +3,7 @@ import { getDb } from '../db/index.js';
 import { listTasks } from '../db/tasks.js';
 import { incrementalSync } from '../sync.js';
 import { daysSince } from '../utils.js';
+import { c, priorityBadge, energyBadge } from '../colors.js';
 
 interface BriefingOptions {
   context?: string;
@@ -91,46 +92,48 @@ export function runBriefing(options: BriefingOptions): void {
 
   // Section 1: Inbox (omit if both = 0)
   if (inboxTaskCount > 0 || inboxNoteCount > 0) {
-    lines.push(`── Inbox ─────────────────────────────────────`);
+    lines.push(c.label(`── Inbox ─────────────────────────────────────`));
     lines.push(`${inboxTaskCount} unsorted task${inboxTaskCount === 1 ? '' : 's'}, ${inboxNoteCount} unsorted note${inboxNoteCount === 1 ? '' : 's'}`);
     lines.push('');
   }
 
   // Section 2: Active Context (never omit)
-  lines.push(`── Active Context: ${activeContext} (${contextName}) ──────────────────`);
+  lines.push(c.label(`── Active Context: `) + c.cyan(activeContext) + c.label(` (${contextName}) ──────────────────`));
   lines.push('');
 
   // Section 3: Active Tasks
-  lines.push(`── Active Tasks ──────────────────────────────`);
+  lines.push(c.label(`── Active Tasks ──────────────────────────────`));
   if (activeTasks.length === 0) {
     lines.push('  (none)');
   } else {
     for (const t of activeTasks) {
       const days = daysSince(t.updated_at);
-      const meta = [t.priority, t.energy ?? '-', t.effort ?? '-'].join(' / ');
-      lines.push(`  ${t.id}  ${t.title}`);
-      lines.push(`    ${meta}  (${days}d in state)`);
+      const pri = priorityBadge(t.priority, t.priority);
+      const energy = energyBadge(t.energy, t.energy ?? '-');
+      const effort = t.effort ?? '-';
+      lines.push(`  ${c.muted(t.id)}  ${t.title}`);
+      lines.push(`    ${pri} / ${energy} / ${effort}  ${c.muted(`(${days}d in state)`)}`);
     }
   }
   lines.push('');
 
   // Section 4: Stale Tasks (omit if empty)
   if (staleTasks.length > 0) {
-    lines.push(`── Stale Tasks ───────────────────────────────`);
+    lines.push(c.label(`── Stale Tasks ───────────────────────────────`));
     for (const t of staleTasks) {
       const days = daysSince(t.updated_at);
-      lines.push(`  ${t.id}  ${t.title}  (${days}d since last change)`);
+      lines.push(c.amber(`  ${t.id}  ${t.title}  (${days}d since last change)`));
     }
     lines.push('');
   }
 
   // Section 5: Blocked Tasks (omit if empty)
   if (blockedTasks.length > 0) {
-    lines.push(`── Blocked Tasks ─────────────────────────────`);
+    lines.push(c.label(`── Blocked Tasks ─────────────────────────────`));
     for (const t of blockedTasks) {
-      lines.push(`  ${t.id}  ${t.title}`);
+      lines.push(`  ${c.muted(t.id)}  ${c.amber(t.title)}`);
       if (t.blocked_by.length > 0) {
-        lines.push(`    Blocked by: ${t.blocked_by.join(', ')}`);
+        lines.push(`    ${c.muted('Blocked by:')} ${c.muted(t.blocked_by.join(', '))}`);
       }
     }
     lines.push('');
@@ -138,20 +141,20 @@ export function runBriefing(options: BriefingOptions): void {
 
   // Section 6: In Review (omit if empty)
   if (reviewTasks.length > 0) {
-    lines.push(`── In Review ─────────────────────────────────`);
+    lines.push(c.label(`── In Review ─────────────────────────────────`));
     for (const t of reviewTasks) {
       const days = daysSince(t.updated_at);
-      lines.push(`  ${t.id}  ${t.title}  (${days}d)`);
+      lines.push(`  ${c.muted(t.id)}  ${c.violet(t.title)}  ${c.muted(`(${days}d)`)}`);
     }
     lines.push('');
   }
 
   // Section 7: Yesterday's Notes (omit if empty)
   if (yesterdayNotes.length > 0) {
-    lines.push(`── Yesterday's Notes ─────────────────────────`);
+    lines.push(c.label(`── Yesterday's Notes ─────────────────────────`));
     for (const n of yesterdayNotes) {
-      const taskSuffix = n.task_title ? `  → ${n.task_title}` : '';
-      lines.push(`  ${n.id}  ${n.title ?? '(untitled)'}${taskSuffix}`);
+      const taskSuffix = n.task_title ? `  → ${c.cyan(n.task_title)}` : '';
+      lines.push(`  ${c.muted(n.id)}  ${n.title ?? '(untitled)'}${taskSuffix}`);
     }
     lines.push('');
   }
@@ -167,7 +170,7 @@ export function runBriefing(options: BriefingOptions): void {
     inboxNoteCount > 0;
 
   if (!hasOptionalContent) {
-    lines.push(`Nothing active in ${activeContext}. Check your inbox or backlog.`);
+    lines.push(c.muted(`Nothing active in ${activeContext}. Check your inbox or backlog.`));
   }
 
   process.stdout.write(lines.join('\n') + '\n');

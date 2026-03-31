@@ -5,11 +5,12 @@ import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getKnowledgeEntry, upsertKnowledgeEntry } from '../../db/knowledge.js';
 import { incrementalSync } from '../../sync.js';
+import { c } from '../../colors.js';
 
 export function runNoteEdit(id: string, options: { config?: string }): void {
   const editor = process.env.EDITOR;
   if (!editor) {
-    process.stderr.write('No $EDITOR set. Export EDITOR=<your editor> and try again.\n');
+    process.stderr.write(c.red('No $EDITOR set. Export EDITOR=<your editor> and try again.\n'));
     process.exit(1);
   }
 
@@ -21,7 +22,7 @@ export function runNoteEdit(id: string, options: { config?: string }): void {
 
   const entry = getKnowledgeEntry(db, id);
   if (!entry) {
-    process.stderr.write(`Note '${id}' not found.\n`);
+    process.stderr.write(c.red(`Note '${id}' not found.\n`));
     db.close();
     process.exit(1);
   }
@@ -29,7 +30,7 @@ export function runNoteEdit(id: string, options: { config?: string }): void {
   try {
     execSync(`${editor} ${entry.path}`, { stdio: 'inherit' });
   } catch {
-    process.stderr.write('Editor exited with an error.\n');
+    process.stderr.write(c.red('Editor exited with an error.\n'));
     db.close();
     process.exit(1);
   }
@@ -58,5 +59,5 @@ export function runNoteEdit(id: string, options: { config?: string }): void {
   })();
 
   db.close();
-  process.stdout.write(`Updated note ${id}.\n`);
+  process.stdout.write(c.green(`Updated note ${id}.\n`));
 }
