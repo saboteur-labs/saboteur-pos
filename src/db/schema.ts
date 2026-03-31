@@ -1,0 +1,59 @@
+export const CREATE_TABLES = `
+CREATE TABLE IF NOT EXISTS contexts (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  description TEXT DEFAULT NULL,
+  repos       TEXT DEFAULT '[]',
+  created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sources (
+  id         TEXT PRIMARY KEY,
+  type       TEXT NOT NULL,
+  path       TEXT NOT NULL,
+  owner      TEXT NOT NULL,
+  context_id TEXT DEFAULT NULL,
+  enabled    INTEGER DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS tasks (
+  id            TEXT PRIMARY KEY,
+  title         TEXT NOT NULL,
+  state         TEXT NOT NULL,
+  context_id    TEXT NOT NULL REFERENCES contexts(id),
+  priority      TEXT DEFAULT 'normal',
+  energy        TEXT DEFAULT NULL,
+  effort        TEXT DEFAULT NULL,
+  blocks        TEXT DEFAULT '[]',
+  blocked_by    TEXT DEFAULT '[]',
+  note_id       TEXT DEFAULT NULL,
+  repo          TEXT DEFAULT NULL,
+  branch        TEXT DEFAULT NULL,
+  state_history TEXT DEFAULT '[]',
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_index (
+  id         TEXT PRIMARY KEY,
+  source_id  TEXT NOT NULL REFERENCES sources(id),
+  type       TEXT NOT NULL,
+  title      TEXT,
+  tags       TEXT DEFAULT '[]',
+  task_id    TEXT DEFAULT NULL,
+  context_id TEXT DEFAULT NULL,
+  path       TEXT NOT NULL,
+  created_at TEXT,
+  updated_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_tasks_context ON tasks(context_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_state   ON tasks(state);
+CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_ki_source  ON knowledge_index(source_id);
+CREATE INDEX IF NOT EXISTS idx_ki_type    ON knowledge_index(type);
+CREATE INDEX IF NOT EXISTS idx_ki_context ON knowledge_index(context_id);
+CREATE INDEX IF NOT EXISTS idx_ki_task    ON knowledge_index(task_id);
+CREATE INDEX IF NOT EXISTS idx_ki_updated ON knowledge_index(updated_at);
+`;

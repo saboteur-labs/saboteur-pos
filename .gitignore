@@ -1,0 +1,6 @@
+node_modules/
+dist/
+saboteur.secrets.json
+*.db
+*.db-shm
+*.db-wal

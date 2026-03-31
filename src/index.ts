@@ -1,0 +1,263 @@
+import { Command } from 'commander';
+import { runInit } from './commands/init.js';
+import { runStatus } from './commands/status.js';
+import { runTaskAdd } from './commands/task/add.js';
+import { runTaskList } from './commands/task/list.js';
+import { runTaskView } from './commands/task/view.js';
+import { runTaskMove } from './commands/task/move.js';
+import { runTaskEdit } from './commands/task/edit.js';
+import { runTaskLink } from './commands/task/link.js';
+import { runContextNew } from './commands/context/new.js';
+import { runContextList } from './commands/context/list.js';
+import { runContextUse } from './commands/context/use.js';
+import { runContextShow } from './commands/context/show.js';
+import { runContextDelete } from './commands/context/delete.js';
+import { runNoteNew } from './commands/note/new.js';
+import { runNoteList } from './commands/note/list.js';
+import { runNoteView } from './commands/note/view.js';
+import { runNoteEdit } from './commands/note/edit.js';
+import { runNoteFind } from './commands/note/find.js';
+import { runSync } from './commands/sync.js';
+import { runBriefing } from './commands/briefing.js';
+
+const program = new Command();
+
+program
+  .name('sab')
+  .description('Saboteur POS — personal task and note management')
+  .version('0.1.0')
+  .addHelpText('after', `
+Global flags (valid on any read command):
+  --context <slug>   Override active context for this command only
+  --all              Bypass context filter — return results across all contexts
+
+Commands:
+  sab init                     Initialize workspace
+  sab status                   System state (read-only)
+  sab briefing [--context]     Daily briefing (read-only)
+  sab sync                     Rebuild knowledge index from disk
+
+  sab task add <title>         Create task (default state: backlog)
+  sab task list [--view <v>]   List tasks  views: today|active|backlog|blocked|review|deep-work|stale
+  sab task view <id>           Full task detail + state history
+  sab task move <id> <state>   Transition state
+  sab task done <id>           Shorthand: move to done
+  sab task block <id>          Shorthand: move to blocked
+  sab task edit <id>           Edit fields in \$EDITOR
+  sab task link <id> --note <note_id>    Link a note
+  sab task link <id> --blocks <task_id>  Create block dependency
+
+  sab context new <slug>       Create context
+  sab context list             List contexts with counts
+  sab context use <slug>       Set active context
+  sab context show             Print active context
+  sab context delete <slug>    Delete context (--reassign | --force)
+
+  sab note new <title>         Create note (opens \$EDITOR)
+  sab note list [--view recent] List notes
+  sab note view <id>           Print note with resolved wiki-links
+  sab note edit <id>           Edit note file in \$EDITOR
+  sab note find --tag <tag>    Filter notes by tag
+  sab note find --task <id>    Filter notes linked to a task
+
+State machine:
+  backlog → active → review → done
+  any non-done → blocked → active
+  active → backlog
+
+Enums:
+  priority  critical | high | normal | low     (default: normal)
+  energy    deep | shallow | admin
+  effort    xs | s | m | l | xl
+  state     backlog | active | blocked | review | done
+
+Run 'sab help <command>' or 'sab <noun> help <verb>' for details.
+Example: sab help task    sab task help add`);
+
+// ── sab init ────────────────────────────────────────────────────────────────
+program
+  .command('init')
+  .description('Initialize a new Saboteur workspace')
+  .option('--config <path>', 'Initialize from an existing config file (machine migration)')
+  .action((options) => runInit(options));
+
+// ── sab status ───────────────────────────────────────────────────────────────
+program
+  .command('status')
+  .description('Print system state (read-only)')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runStatus(options));
+
+// ── sab task ─────────────────────────────────────────────────────────────────
+const task = program.command('task').description('Manage tasks').addHelpText('after', `
+State machine:  backlog → active → review → done
+                any non-done → blocked → active
+                active → backlog
+
+Enums:
+  --priority  critical | high | normal | low   (default: normal)
+  --energy    deep | shallow | admin
+  --effort    xs | s | m | l | xl
+  <state>     backlog | active | blocked | review | done`);
+
+task
+  .command('add <title>')
+  .description('Create a new task')
+  .option('--context <slug>', 'Context slug')
+  .option('--priority <p>', 'Priority: critical | high | normal | low')
+  .option('--energy <e>', 'Energy: deep | shallow | admin')
+  .option('--effort <e>', 'Effort: xs | s | m | l | xl')
+  .option('--repo <name>', 'Repository name (Phase 1 manual entry)')
+  .option('--config <path>', 'Path to config file')
+  .action((title, options) => runTaskAdd(title, options));
+
+task
+  .command('list')
+  .description('List tasks')
+  .option('--view <v>', 'today | active | backlog | blocked | review | deep-work | stale')
+  .option('--context <slug>', 'Override active context')
+  .option('--all', 'All contexts')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runTaskList(options));
+
+task
+  .command('view <id>')
+  .description('Show full detail for a task')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runTaskView(id, options));
+
+task
+  .command('move <id> <state>')
+  .description('Transition a task to a new state')
+  .option('--config <path>', 'Path to config file')
+  .action((id, state, options) => runTaskMove(id, state, options));
+
+task
+  .command('done <id>')
+  .description('Shorthand for sab task move <id> done')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runTaskMove(id, 'done', options));
+
+task
+  .command('block <id>')
+  .description('Shorthand for sab task move <id> blocked')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runTaskMove(id, 'blocked', options));
+
+task
+  .command('edit <id>')
+  .description('Edit task fields in $EDITOR')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runTaskEdit(id, options));
+
+task
+  .command('link <id>')
+  .description('Link a note (--note) or create a block dependency (--blocks)')
+  .option('--note <note_id>', 'Link a note to this task')
+  .option('--blocks <task_id>', 'This task blocks another task')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runTaskLink(id, options));
+
+// ── sab context ──────────────────────────────────────────────────────────────
+const context = program.command('context').description('Manage contexts').addHelpText('after', `
+Notes:
+  'inbox' is a reserved context — cannot be deleted or renamed.
+  sab context delete requires --reassign <slug> or --force unless the context is empty.`);
+
+context
+  .command('new <slug>')
+  .description('Create a new context')
+  .option('--name <name>', 'Display name')
+  .option('--description <desc>', 'Optional description')
+  .option('--config <path>', 'Path to config file')
+  .action((slug, options) => runContextNew(slug, options));
+
+context
+  .command('list')
+  .description('List all contexts with counts')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runContextList(options));
+
+context
+  .command('use <slug>')
+  .description('Set the active context (persists to config)')
+  .option('--config <path>', 'Path to config file')
+  .action((slug, options) => runContextUse(slug, options));
+
+context
+  .command('show')
+  .description('Print the currently active context')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runContextShow(options));
+
+context
+  .command('delete <slug>')
+  .description('Delete a context')
+  .option('--reassign <slug>', 'Migrate all items to this context')
+  .option('--force', 'Orphan all items to inbox')
+  .option('--config <path>', 'Path to config file')
+  .action((slug, options) => runContextDelete(slug, options));
+
+// ── sab note ─────────────────────────────────────────────────────────────────
+const note = program.command('note').description('Manage notes').addHelpText('after', `
+Notes:
+  The .md file is the source of truth — SQLite is a derived index.
+  Wiki-links: [[note_id]] or [[title-slug]] — unresolved shows as [[broken: slug]].
+  sab sync rebuilds the index; incremental sync runs automatically before note queries.`);
+
+note
+  .command('new <title>')
+  .description('Create a new note and open in $EDITOR')
+  .option('--context <slug>', 'Set context in frontmatter')
+  .option('--task <id>', 'Pre-populate task_id in frontmatter')
+  .option('--tag <tag>', 'Add a tag (repeatable)', (val, prev: string[]) => [...prev, val], [] as string[])
+  .option('--config <path>', 'Path to config file')
+  .action((title, options) => runNoteNew(title, options));
+
+note
+  .command('list')
+  .description('List notes in the active context')
+  .option('--view <v>', 'recent (last 7 days)')
+  .option('--context <slug>', 'Override active context')
+  .option('--all', 'All contexts')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runNoteList(options));
+
+note
+  .command('view <id>')
+  .description('Print a note with resolved wiki-links')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runNoteView(id, options));
+
+note
+  .command('edit <id>')
+  .description('Open note in $EDITOR and re-index after close')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runNoteEdit(id, options));
+
+note
+  .command('find')
+  .description('Filter notes by tag or task')
+  .option('--tag <tag>', 'Match notes containing this tag')
+  .option('--task <id>', 'Match notes linked to this task')
+  .option('--context <slug>', 'Override active context')
+  .option('--all', 'All contexts')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runNoteFind(options));
+
+// ── sab briefing ─────────────────────────────────────────────────────────────
+program
+  .command('briefing')
+  .description('Run the daily briefing (read-only)')
+  .option('--context <slug>', 'Run briefing for a different context')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runBriefing(options));
+
+// ── sab sync ─────────────────────────────────────────────────────────────────
+program
+  .command('sync')
+  .description('Rebuild the knowledge index from all enabled sources')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runSync(options));
+
+program.parse(process.argv);

@@ -1,0 +1,29 @@
+{
+  "name": "saboteur-pos",
+  "version": "0.1.0",
+  "description": "Personal Operating System — CLI for task and note management",
+  "type": "module",
+  "bin": {
+    "sab": "./bin/sab.js"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc && chmod +x bin/sab.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "commander": "^12.1.0",
+    "gray-matter": "^4.0.3"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.23.0",
+    "execa": "^9.3.0",
+    "tsx": "^4.17.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  }
+}
