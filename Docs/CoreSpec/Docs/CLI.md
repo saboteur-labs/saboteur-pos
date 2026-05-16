@@ -201,6 +201,38 @@ task_abc123 now blocks task_ghi456.
 
 ---
 
+### `sab task delete <id>`
+
+Permanently delete a task from the database.
+
+- Safe by default: refuses if the task has any dependency links (`blocks` or `blocked_by` is non-empty).
+- Deletion is allowed for tasks in any state, including `done`.
+- All operations run in a single transaction — no partial state.
+
+**Flags:**
+| Flag | Behavior |
+|---|---|
+| `--force` | Delete even if task has dependency links |
+
+**`--force` behavior:**
+1. For each task in `blocked_by` (tasks blocking this one): removes this task from their `blocks` array.
+2. For each task in `blocks` (tasks this one blocks): removes this task from their `blocked_by` array; if `blocked_by` becomes empty and that task's state is `blocked`, auto-transitions it to `active` (same logic as LOGIC.md §8).
+3. If a note is linked (`note_id` is set): sets `knowledge_index.task_id = NULL` for that note. The note file itself is not deleted.
+4. Deletes the task row.
+
+**Output:**
+
+```
+Deleted task: Fix auth bug
+```
+
+**Errors:**
+
+- Task not found → `"Task 'task_xyz' not found."`
+- Has dependency links (no `--force`) → `"'Fix auth bug' has 2 outgoing and 1 incoming dependency links. Use --force to delete anyway."`
+
+---
+
 ## Note Commands
 
 ### `sab note new <title>`

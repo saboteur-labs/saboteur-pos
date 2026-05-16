@@ -97,4 +97,74 @@ describe('Layer 2 — Tasks + State Machine', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain("does not exist");
   });
+
+  describe('sab task delete', () => {
+    it('deletes a standalone task with no dependencies', () => {
+      const { stdout } = sabConfig('task add "Accidental task"', env);
+      const id = extractId(stdout);
+
+      const del = sabConfig(`task delete ${id}`, env);
+      expect(del.code).toBe(0);
+      expect(del.stdout).toContain('Deleted task: Accidental task');
+
+      const view = sabConfig(`task view ${id}`, env);
+      expect(view.code).toBe(1);
+      expect(view.stderr).toContain('not found');
+    });
+
+    it('refuses deletion when task has outgoing dependency links', () => {
+      const a = extractId(sabConfig('task add "Blocker"', env).stdout);
+      const b = extractId(sabConfig('task add "Dependent"', env).stdout);
+      sabConfig(`task link ${a} --blocks ${b}`, env);
+
+      const del = sabConfig(`task delete ${a}`, env);
+      expect(del.code).toBe(1);
+      expect(del.stderr).toContain('Use --force');
+      expect(del.stderr).toContain('1 outgoing');
+    });
+
+    it('refuses deletion when task has incoming dependency links', () => {
+      const a = extractId(sabConfig('task add "Blocker"', env).stdout);
+      const b = extractId(sabConfig('task add "Dependent"', env).stdout);
+      sabConfig(`task link ${a} --blocks ${b}`, env);
+
+      const del = sabConfig(`task delete ${b}`, env);
+      expect(del.code).toBe(1);
+      expect(del.stderr).toContain('Use --force');
+      expect(del.stderr).toContain('1 incoming');
+    });
+
+    it('--force removes task and cleans up dependency arrays of related tasks', () => {
+      const a = extractId(sabConfig('task add "Blocker"', env).stdout);
+      const b = extractId(sabConfig('task add "Dependent"', env).stdout);
+      sabConfig(`task link ${a} --blocks ${b}`, env);
+
+      const del = sabConfig(`task delete ${a} --force`, env);
+      expect(del.code).toBe(0);
+
+      // Dependent's blocked_by should be empty
+      const view = sabConfig(`task view ${b}`, env);
+      expect(view.stdout).not.toContain(a);
+    });
+
+    it('--force auto-unblocks a blocked dependent when blocked_by becomes empty', () => {
+      const a = extractId(sabConfig('task add "Blocker"', env).stdout);
+      const b = extractId(sabConfig('task add "Dependent"', env).stdout);
+      sabConfig(`task move ${b} active`, env);
+      sabConfig(`task link ${a} --blocks ${b}`, env);
+      sabConfig(`task block ${b}`, env);
+
+      const del = sabConfig(`task delete ${a} --force`, env);
+      expect(del.code).toBe(0);
+
+      const view = sabConfig(`task view ${b}`, env);
+      expect(view.stdout).toContain('State:    active');
+    });
+
+    it('returns error for non-existent task id', () => {
+      const del = sabConfig('task delete task_nonexistent', env);
+      expect(del.code).toBe(1);
+      expect(del.stderr).toContain("not found");
+    });
+  });
 });

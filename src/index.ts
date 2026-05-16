@@ -7,6 +7,7 @@ import { runTaskView } from './commands/task/view.js';
 import { runTaskMove } from './commands/task/move.js';
 import { runTaskEdit } from './commands/task/edit.js';
 import { runTaskLink } from './commands/task/link.js';
+import { runTaskDelete } from './commands/task/delete.js';
 import { runContextNew } from './commands/context/new.js';
 import { runContextList } from './commands/context/list.js';
 import { runContextUse } from './commands/context/use.js';
@@ -46,6 +47,7 @@ Commands:
   sab task edit <id>           Edit fields in \$EDITOR
   sab task link <id> --note <note_id>    Link a note
   sab task link <id> --blocks <task_id>  Create block dependency
+  sab task delete <id>                   Delete task permanently (--force to override dependency guard)
 
   sab context new <slug>       Create context
   sab context list             List contexts with counts
@@ -157,6 +159,13 @@ task
   .option('--blocks <task_id>', 'This task blocks another task')
   .option('--config <path>', 'Path to config file')
   .action((id, options) => runTaskLink(id, options));
+
+task
+  .command('delete <id>')
+  .description('Delete a task permanently')
+  .option('--force', 'Delete even if task has dependency links')
+  .option('--config <path>', 'Path to config file')
+  .action((id, options) => runTaskDelete(id, options));
 
 // ── sab context ──────────────────────────────────────────────────────────────
 const context = program.command('context').description('Manage contexts').addHelpText('after', `

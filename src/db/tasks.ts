@@ -261,3 +261,52 @@ export function setTaskNote(db: Database.Database, taskId: string, noteId: strin
     db.prepare(`UPDATE tasks SET note_id = ?, updated_at = ? WHERE id = ?`).run(noteId, now, taskId);
   })();
 }
+
+export interface DeleteTaskOptions {
+  force?: boolean;
+}
+
+export function deleteTask(
+  db: Database.Database,
+  id: string,
+  opts: DeleteTaskOptions = {},
+): { title: string } {
+  const task = getTask(db, id);
+  if (!task) throw new Error(`Task '${id}' not found.`);
+
+  const blocksCount = task.blocks.length;
+  const blockedByCount = task.blocked_by.length;
+
+  if ((blocksCount > 0 || blockedByCount > 0) && !opts.force) {
+    const total = blocksCount + blockedByCount;
+    throw new Error(
+      `'${task.title}' has ${blocksCount} outgoing and ${blockedByCount} incoming dependency link${total === 1 ? '' : 's'}. Use --force to delete anyway.`,
+    );
+  }
+
+  db.transaction(() => {
+    for (const blockerId of task.blocked_by) {
+      const blocker = getTask(db, blockerId);
+      if (!blocker) continue;
+      updateTaskDeps(db, blockerId, blocker.blocks.filter((bid) => bid !== id), blocker.blocked_by);
+    }
+
+    for (const dependentId of task.blocks) {
+      const dependent = getTask(db, dependentId);
+      if (!dependent) continue;
+      const newBlockedBy = dependent.blocked_by.filter((bid) => bid !== id);
+      updateTaskDeps(db, dependentId, dependent.blocks, newBlockedBy);
+      if (newBlockedBy.length === 0 && dependent.state === 'blocked') {
+        updateTaskState(db, dependentId, 'active', `unblocked by deletion of ${id}`);
+      }
+    }
+
+    if (task.note_id) {
+      db.prepare(`UPDATE knowledge_index SET task_id = NULL WHERE task_id = ?`).run(id);
+    }
+
+    db.prepare(`DELETE FROM tasks WHERE id = ?`).run(id);
+  })();
+
+  return { title: task.title };
+}
