@@ -1,6 +1,6 @@
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../config.js';
 import { getDb } from '../db/index.js';
-import { listTasks } from '../db/tasks.js';
+import { listTasks, getTask } from '../db/tasks.js';
 import { incrementalSync } from '../sync.js';
 import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
@@ -133,7 +133,8 @@ export function runBriefing(options: BriefingOptions): void {
     for (const t of blockedTasks) {
       lines.push(`  ${c.muted(t.id)}  ${c.amber(t.title)}`);
       if (t.blocked_by.length > 0) {
-        lines.push(`    ${c.muted('Blocked by:')} ${c.muted(t.blocked_by.join(', '))}`);
+        const blockerTitles = t.blocked_by.map(id => getTask(db, id)?.title ?? id);
+        lines.push(`    ${c.muted('Blocked by:')} ${c.muted(blockerTitles.join(', '))}`);
       }
     }
     lines.push('');

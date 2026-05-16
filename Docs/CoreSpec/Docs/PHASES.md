@@ -29,16 +29,16 @@ Each phase has:
 
 **Build this first. Everything else depends on it.**
 
-- [ ] Define and run all `CREATE TABLE` statements from SCHEMA.md
-- [ ] Implement `sab init` per LOGIC.md §1
+- [x] Define and run all `CREATE TABLE` statements from SCHEMA.md
+- [x] Implement `sab init` per LOGIC.md §1
     - Create directory structure
     - Seed `inbox` context
     - Seed `personal-notes` source
     - Write `saboteur.config.json` with defaults
     - Create empty `saboteur.secrets.json` and add to `.gitignore`
-- [ ] Implement config read/write — all commands load config on start
-- [ ] Implement `sab init --config <path>` for machine migration
-- [ ] Implement `sab status` per LOGIC.md §10
+- [x] Implement config read/write — all commands load config on start
+- [x] Implement `sab init --config <path>` for machine migration
+- [x] Implement `sab status` per LOGIC.md §10
 
 **Done when:** `sab init` completes without error, `sab status` prints correct paths and counts, `saboteur.secrets.json` is gitignored.
 
@@ -46,14 +46,14 @@ Each phase has:
 
 ### Layer 2 — Tasks (CRUD + State Machine)
 
-- [ ] Implement `sab task add` with all flags
-- [ ] Implement `sab task list` with tabular output and `--view` flag
-- [ ] Implement `sab task view` with full detail output including state history
-- [ ] Implement `sab task move` with state machine validation per LOGIC.md §2
-- [ ] Implement `sab task done` and `sab task block` shorthands
-- [ ] Implement `sab task edit` with `$EDITOR` round-trip
-- [ ] All state transitions must write to `state_history`
-- [ ] All writes must use transactions
+- [x] Implement `sab task add` with all flags
+- [x] Implement `sab task list` with tabular output and `--view` flag
+- [x] Implement `sab task view` with full detail output including state history
+- [x] Implement `sab task move` with state machine validation per LOGIC.md §2
+- [x] Implement `sab task done` and `sab task block` shorthands
+- [x] Implement `sab task edit` with `$EDITOR` round-trip
+- [x] All state transitions must write to `state_history`
+- [x] All writes must use transactions
 
 **Phase 2 stubs (create column, wire no logic):**
 
@@ -68,18 +68,18 @@ Each phase has:
 
 ### Layer 3 — Contexts
 
-- [ ] Implement `sab context new`
-- [ ] Implement `sab context list` with task and note counts
-- [ ] Implement `sab context use` — persists to config
-- [ ] Implement `sab context show`
-- [ ] Implement `sab context delete` with full safe-deletion logic per LOGIC.md §4:
+- [x] Implement `sab context new`
+- [x] Implement `sab context list` with task and note counts
+- [x] Implement `sab context use` — persists to config
+- [x] Implement `sab context show`
+- [x] Implement `sab context delete` with full safe-deletion logic per LOGIC.md §4:
     - Refuse if items exist (no flag)
     - `--reassign <slug>` migrates and deletes
     - `--force` orphans to inbox and deletes
     - `inbox` cannot be deleted under any circumstances
-- [ ] All task commands must respect active context by default
-- [ ] `--context <slug>` flag overrides per-command
-- [ ] `--all` flag bypasses context filter
+- [x] All task commands must respect active context by default
+- [x] `--context <slug>` flag overrides per-command
+- [x] `--all` flag bypasses context filter
 
 **Done when:** Can create and switch contexts. All task list/view commands scope correctly. Deletion behaves safely in all three cases.
 
@@ -87,7 +87,7 @@ Each phase has:
 
 ### Layer 4 — Derived Task Views
 
-- [ ] Implement all views from SCHEMA.md view definitions:
+- [x] Implement all views from SCHEMA.md view definitions:
     - `today` — active, sorted priority desc + energy desc
     - `active`
     - `backlog`
@@ -95,8 +95,8 @@ Each phase has:
     - `review`
     - `deep-work` — active + deep energy + no blocked_by
     - `stale` — active + updated_at older than `stale_task_days`
-- [ ] `--view <name>` flag on `sab task list`
-- [ ] Priority and energy sort orders must be correct (see SCHEMA.md)
+- [x] `--view <name>` flag on `sab task list`
+- [x] Priority and energy sort orders must be correct (see SCHEMA.md)
 
 **Done when:** All seven views return correct filtered and sorted results. `deep-work` correctly excludes tasks with non-empty `blocked_by`. `stale` respects the config value.
 
@@ -104,19 +104,19 @@ Each phase has:
 
 ### Layer 5 — Notes (CRUD + Linking)
 
-- [ ] Implement knowledge index sync (`sab sync`) per LOGIC.md §5
+- [x] Implement knowledge index sync (`sab sync`) per LOGIC.md §5
     - Full rebuild on `sab sync`
     - Incremental sync before note queries
     - Frontmatter fallbacks per LOGIC.md §5
-- [ ] Implement `sab note new` — generate frontmatter, open `$EDITOR`, index after close
-- [ ] Implement `sab note list` with tabular output
-- [ ] Implement `sab note view` — render with resolved wiki-links
-- [ ] Implement `sab note edit` — open `.md` file in `$EDITOR`, re-index after close
-- [ ] Implement `sab note find --tag` and `sab note find --task`
-- [ ] Implement `sab task link <id> --note <note_id>`
-- [ ] Implement `sab task link <id> --blocks <other_id>` with cycle detection per LOGIC.md §8
+- [x] Implement `sab note new` — generate frontmatter, open `$EDITOR`, index after close
+- [x] Implement `sab note list` with tabular output
+- [x] Implement `sab note view` — render with resolved wiki-links
+- [x] Implement `sab note edit` — open `.md` file in `$EDITOR`, re-index after close
+- [x] Implement `sab note find --tag` and `sab note find --task`
+- [x] Implement `sab task link <id> --note <note_id>`
+- [x] Implement `sab task link <id> --blocks <other_id>` with cycle detection per LOGIC.md §8
     - Auto-unblock dependent tasks when blocking task moves to `done`
-- [ ] Implement wiki-link resolution per LOGIC.md §6
+- [x] Implement wiki-link resolution per LOGIC.md §6
 
 **Done when:** Can create, view, edit, and find notes. Frontmatter is correctly parsed and indexed. Wiki-links resolve correctly. Task-note linking is bidirectional. Dependency unblocking works automatically on task completion.
 
@@ -126,7 +126,7 @@ Each phase has:
 
 **This is the Phase 1 done signal.**
 
-- [ ] Implement `sab briefing` per LOGIC.md §7:
+- [x] Implement `sab briefing` per LOGIC.md §7:
     - Section 1: Inbox count (omit if empty)
     - Section 2: Active context
     - Section 3: Active tasks (sorted, stale tasks excluded here)
@@ -134,8 +134,8 @@ Each phase has:
     - Section 5: Blocked tasks with dependency titles (omit if none)
     - Section 6: In review (omit if none)
     - Section 7: Yesterday's notes (omit if none)
-- [ ] Empty briefing message when all optional sections are empty
-- [ ] `--context` flag to run briefing for a different context
+- [x] Empty briefing message when all optional sections are empty
+- [x] `--context` flag to run briefing for a different context
 
 **Done when:** `sab briefing` is run on a populated system and all sections render correctly. Stale tasks appear in Section 4 and not Section 3. Blocked task dependencies are titled, not just IDs. Yesterday's notes show linked task title when `task_id` is set.
 
