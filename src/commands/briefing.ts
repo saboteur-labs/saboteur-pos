@@ -7,7 +7,7 @@ import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
 import { discoverRepos } from '../git/discover.js';
 import { indexCommits } from '../git/index-job.js';
-import { getHeadState, isDirty } from '../git/read.js';
+import { getBranchLastActivity, getHeadState, isDirty, listBranches } from '../git/read.js';
 
 interface BriefingOptions {
   context?: string;
@@ -213,19 +213,25 @@ interface RepoStateEntry {
   commits: Array<{ sha: string; message: string; author_ts: string; task_title: string }>;
 }
 
+interface StaleBranch {
+  repo: string;
+  branch: string;
+  daysSinceCommit: number;
+}
+
 function collectRepoState(
   db: ReturnType<typeof getDb>,
   config: ReturnType<typeof loadConfig>,
   activeContext: string,
-): RepoStateEntry[] {
+): { repos: RepoStateEntry[]; staleBranches: StaleBranch[] } {
   const reposDir = resolvePath(config.repos_dir);
   const discovered = discoverRepos(reposDir).filter((r) => r.kind === 'working');
-  if (discovered.length === 0) return [];
+  if (discovered.length === 0) return { repos: [], staleBranches: [] };
 
   const ctx = getContext(db, activeContext);
   const allowed = ctx && ctx.repos.length > 0 ? new Set(ctx.repos) : null;
-  const repos = allowed ? discovered.filter((r) => allowed.has(r.name)) : discovered;
-  if (repos.length === 0) return [];
+  const filtered = allowed ? discovered.filter((r) => allowed.has(r.name)) : discovered;
+  if (filtered.length === 0) return { repos: [], staleBranches: [] };
 
   const commitQuery = db.prepare(
     `SELECT c.sha, c.message, c.author_ts, t.title as task_title
@@ -236,9 +242,27 @@ function collectRepoState(
       LIMIT 5`,
   );
 
-  return repos.map((repo) => {
+  const staleThresholdMs = config.briefing.stale_branch_days * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  const staleBranches: StaleBranch[] = [];
+
+  const repos = filtered.map((repo) => {
     const head = getHeadState(repo.path);
     const headLabel = head.kind === 'branch' ? head.name : `detached @ ${head.sha}`;
+
+    for (const branch of listBranches(repo.path)) {
+      const lastActivity = getBranchLastActivity(repo.path, branch);
+      if (!lastActivity) continue;
+      const ageMs = now - new Date(lastActivity).getTime();
+      if (ageMs > staleThresholdMs) {
+        staleBranches.push({
+          repo: repo.name,
+          branch,
+          daysSinceCommit: Math.floor(ageMs / (24 * 60 * 60 * 1000)),
+        });
+      }
+    }
+
     return {
       name: repo.name,
       headLabel,
@@ -246,12 +270,14 @@ function collectRepoState(
       commits: commitQuery.all(repo.name, activeContext) as RepoStateEntry['commits'],
     };
   });
+
+  return { repos, staleBranches };
 }
 
-function renderRepoState(state: RepoStateEntry[]): string[] {
-  if (state.length === 0) return [];
+function renderRepoState(state: { repos: RepoStateEntry[]; staleBranches: StaleBranch[] }): string[] {
+  if (state.repos.length === 0) return [];
   const lines: string[] = [];
-  for (const repo of state) {
+  for (const repo of state.repos) {
     const dirtyLabel = repo.dirty ? c.amber('✘ dirty') : c.muted('✓ clean');
     lines.push(`  ${c.cyan(repo.name)}  ${c.muted(`(${repo.headLabel})`)}  ${dirtyLabel}`);
     for (const cm of repo.commits) {
@@ -263,5 +289,16 @@ function renderRepoState(state: RepoStateEntry[]): string[] {
       );
     }
   }
+
+  if (state.staleBranches.length > 0) {
+    lines.push('');
+    lines.push(`  ${c.label('Stale Branches')}`);
+    for (const b of state.staleBranches) {
+      lines.push(
+        c.amber(`    ${b.repo}/${b.branch}  (${b.daysSinceCommit}d since last commit)`),
+      );
+    }
+  }
+
   return lines;
 }

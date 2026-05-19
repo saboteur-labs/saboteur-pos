@@ -98,6 +98,7 @@
 **Depends on:** 9
 **Estimate:** 2
 **Notes:** Satisfies spec FR #9.
+**Done:** [x]
 
 ### Task 11: Bare/broken repo footer reporting
 

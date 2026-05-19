@@ -193,6 +193,46 @@ describe('Layer 6 — Daily Briefing', () => {
     expect(result.stdout).not.toContain('── Repo State');
   });
 
+  it('Stale Branches subsection lists branches older than stale_branch_days', () => {
+    // Lower the threshold so we can age branches realistically with --date
+    const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+    config.briefing.stale_branch_days = 14;
+    writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'fresh on main');
+    git(repoPath, 'checkout -q -b old-feature');
+
+    const oldDate = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+    writeFileSync(join(repoPath, 'b.txt'), 'stale');
+    git(repoPath, 'add b.txt');
+    execSync(
+      `GIT_AUTHOR_DATE="${oldDate}" GIT_COMMITTER_DATE="${oldDate}" git ${GIT_ENV} commit -q -m "stale branch commit"`,
+      { cwd: repoPath },
+    );
+    git(repoPath, 'checkout -q main');
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('Stale Branches');
+    expect(result.stdout).toContain('demo/old-feature');
+    expect(result.stdout).toMatch(/20d|21d/);
+  });
+
+  it('Stale Branches subsection is omitted when no branches are stale', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'fresh');
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('── Repo State');
+    expect(result.stdout).not.toContain('Stale Branches');
+  });
+
   it('briefing is read-only — does not modify data', () => {
     const id = extractId(sabConfig('task add "Read only test"', env).stdout);
     sabConfig(`task move ${id} active`, env);

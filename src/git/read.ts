@@ -96,3 +96,10 @@ export function listBranches(repoPath: string): string[] {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
+
+export function getBranchLastActivity(repoPath: string, branch: string): string | null {
+  const out = gitRunSafe(repoPath, ['log', '-1', '--format=%aI', branch]);
+  if (out === null) return null;
+  const trimmed = out.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
