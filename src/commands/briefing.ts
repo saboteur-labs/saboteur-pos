@@ -1,9 +1,13 @@
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../config.js';
 import { getDb } from '../db/index.js';
 import { listTasks, getTask } from '../db/tasks.js';
+import { getContext } from '../db/contexts.js';
 import { incrementalSync } from '../sync.js';
 import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
+import { discoverRepos } from '../git/discover.js';
+import { indexCommits } from '../git/index-job.js';
+import { getHeadState, isDirty } from '../git/read.js';
 
 interface BriefingOptions {
   context?: string;
@@ -20,6 +24,9 @@ export function runBriefing(options: BriefingOptions): void {
 
   // Auto incremental sync before querying notes
   incrementalSync(db, config);
+
+  // Refresh git → task commit links before rendering repo state.
+  indexCommits(db, config);
 
   const activeContext = options.context ?? config.active_context;
   const staleDays = config.briefing.stale_task_days;
@@ -85,6 +92,19 @@ export function runBriefing(options: BriefingOptions): void {
     | undefined;
   const contextName = ctxRow?.name ?? activeContext;
 
+  // Resolve blocker titles before closing the DB
+  const blockerTitlesById = new Map<string, string[]>();
+  for (const t of blockedTasks) {
+    if (t.blocked_by.length === 0) continue;
+    blockerTitlesById.set(
+      t.id,
+      t.blocked_by.map((id) => getTask(db, id)?.title ?? id),
+    );
+  }
+
+  // Collect repo state before closing DB
+  const repoState = collectRepoState(db, config, activeContext);
+
   db.close();
 
   // ── Rendering ─────────────────────────────────────────────────────────────
@@ -132,8 +152,8 @@ export function runBriefing(options: BriefingOptions): void {
     lines.push(c.label(`── Blocked Tasks ─────────────────────────────`));
     for (const t of blockedTasks) {
       lines.push(`  ${c.muted(t.id)}  ${c.amber(t.title)}`);
-      if (t.blocked_by.length > 0) {
-        const blockerTitles = t.blocked_by.map(id => getTask(db, id)?.title ?? id);
+      const blockerTitles = blockerTitlesById.get(t.id);
+      if (blockerTitles && blockerTitles.length > 0) {
         lines.push(`    ${c.muted('Blocked by:')} ${c.muted(blockerTitles.join(', '))}`);
       }
     }
@@ -160,6 +180,14 @@ export function runBriefing(options: BriefingOptions): void {
     lines.push('');
   }
 
+  // Section 8: Repo State (omit if no tracked repos for this context)
+  const repoStateLines = renderRepoState(repoState);
+  if (repoStateLines.length > 0) {
+    lines.push(c.label(`── Repo State ────────────────────────────────`));
+    lines.push(...repoStateLines);
+    lines.push('');
+  }
+
   // Empty state check (all optional sections empty, only Section 2 has content)
   const hasOptionalContent =
     activeTasks.length > 0 ||
@@ -168,11 +196,72 @@ export function runBriefing(options: BriefingOptions): void {
     reviewTasks.length > 0 ||
     yesterdayNotes.length > 0 ||
     inboxTaskCount > 0 ||
-    inboxNoteCount > 0;
+    inboxNoteCount > 0 ||
+    repoStateLines.length > 0;
 
   if (!hasOptionalContent) {
     lines.push(c.muted(`Nothing active in ${activeContext}. Check your inbox or backlog.`));
   }
 
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+interface RepoStateEntry {
+  name: string;
+  headLabel: string;
+  dirty: boolean;
+  commits: Array<{ sha: string; message: string; author_ts: string; task_title: string }>;
+}
+
+function collectRepoState(
+  db: ReturnType<typeof getDb>,
+  config: ReturnType<typeof loadConfig>,
+  activeContext: string,
+): RepoStateEntry[] {
+  const reposDir = resolvePath(config.repos_dir);
+  const discovered = discoverRepos(reposDir).filter((r) => r.kind === 'working');
+  if (discovered.length === 0) return [];
+
+  const ctx = getContext(db, activeContext);
+  const allowed = ctx && ctx.repos.length > 0 ? new Set(ctx.repos) : null;
+  const repos = allowed ? discovered.filter((r) => allowed.has(r.name)) : discovered;
+  if (repos.length === 0) return [];
+
+  const commitQuery = db.prepare(
+    `SELECT c.sha, c.message, c.author_ts, t.title as task_title
+       FROM commits c
+       JOIN tasks t ON c.task_id = t.id
+      WHERE c.repo = ? AND t.context_id = ?
+      ORDER BY c.author_ts DESC
+      LIMIT 5`,
+  );
+
+  return repos.map((repo) => {
+    const head = getHeadState(repo.path);
+    const headLabel = head.kind === 'branch' ? head.name : `detached @ ${head.sha}`;
+    return {
+      name: repo.name,
+      headLabel,
+      dirty: isDirty(repo.path),
+      commits: commitQuery.all(repo.name, activeContext) as RepoStateEntry['commits'],
+    };
+  });
+}
+
+function renderRepoState(state: RepoStateEntry[]): string[] {
+  if (state.length === 0) return [];
+  const lines: string[] = [];
+  for (const repo of state) {
+    const dirtyLabel = repo.dirty ? c.amber('✘ dirty') : c.muted('✓ clean');
+    lines.push(`  ${c.cyan(repo.name)}  ${c.muted(`(${repo.headLabel})`)}  ${dirtyLabel}`);
+    for (const cm of repo.commits) {
+      const short = cm.sha.slice(0, 7);
+      const firstLine = cm.message.split('\n')[0];
+      const date = cm.author_ts.slice(0, 10);
+      lines.push(
+        `    ${c.muted(short)}  ${firstLine}  ${c.muted(date)}  → ${c.cyan(cm.task_title)}`,
+      );
+    }
+  }
+  return lines;
 }

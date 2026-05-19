@@ -1,7 +1,18 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { execSync } from 'child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
+
+const GIT_ENV = '-c user.email=test@test -c user.name=Test';
+function git(cwd: string, args: string): string {
+  return execSync(`git ${GIT_ENV} ${args}`, { cwd, encoding: 'utf-8' });
+}
+function makeCommit(cwd: string, file: string, content: string, message: string): void {
+  writeFileSync(join(cwd, file), content);
+  git(cwd, `add ${file}`);
+  git(cwd, `commit -q -m "${message.replace(/"/g, '\\"')}"`);
+}
 
 function extractId(stdout: string): string {
   const match = stdout.match(/(task_[a-f0-9]+)/);
@@ -131,6 +142,55 @@ describe('Layer 6 — Daily Briefing', () => {
     const result = sabConfig('briefing --context work', env);
     expect(result.stdout).toContain('Active Context: work');
     expect(result.stdout).toContain('Work task');
+  });
+
+  it('Section 8 (repo state) shows branch, dirty flag, and linked commits', () => {
+    const id = extractId(sabConfig('task add "Login bug"', env).stdout);
+    sabConfig(`task move ${id} active`, env);
+    const reposRoot = dirname(env.configPath); // createTestEnv sets repos_dir = root
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', `fix login [${id}]`);
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('── Repo State');
+    expect(result.stdout).toContain('demo');
+    expect(result.stdout).toContain('main');
+    expect(result.stdout).toContain('clean');
+    expect(result.stdout).toContain('fix login');
+    expect(result.stdout).toContain('Login bug');
+  });
+
+  it('Section 8 surfaces detached HEAD as detached @ <sha>', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'first');
+    const sha = git(repoPath, 'rev-parse HEAD').trim();
+    git(repoPath, `checkout -q ${sha}`);
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('detached @');
+    expect(result.stdout).toContain(sha.slice(0, 7));
+  });
+
+  it('Section 8 marks repos with uncommitted changes as dirty', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'first');
+    writeFileSync(join(repoPath, 'b.txt'), 'untracked');
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('dirty');
+  });
+
+  it('Section 8 is omitted when repos_dir has no working repos', () => {
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).not.toContain('── Repo State');
   });
 
   it('briefing is read-only — does not modify data', () => {

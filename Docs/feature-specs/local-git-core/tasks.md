@@ -88,6 +88,7 @@
 **Depends on:** 4, 7
 **Estimate:** 3
 **Notes:** Satisfies spec FR #6 and FR #7. The empty-`contexts.repos` fallback is an assumption — flag for review if scope expands.
+**Done:** [x]
 
 ### Task 10: Stale-branch subsection in briefing
 
