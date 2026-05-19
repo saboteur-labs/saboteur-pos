@@ -97,7 +97,7 @@
 **Depends on:** 7, 9
 **Estimate:** 3
 **Notes:** Satisfies spec req #11.
-**Done:** []
+**Done:** [x]
 
 ### Task 11: Reusable presentational components in Storybook
 
