@@ -221,6 +221,29 @@ describe('Layer 6 — Daily Briefing', () => {
     expect(result.stdout).toMatch(/20d|21d/);
   });
 
+  it('Bare and broken repos are surfaced in a skipped footer', () => {
+    const reposRoot = dirname(env.configPath);
+    const working = join(reposRoot, 'working');
+    mkdirSync(working);
+    git(working, 'init -q -b main');
+    makeCommit(working, 'a.txt', '1', 'first');
+
+    const bare = join(reposRoot, 'bare.git');
+    mkdirSync(bare);
+    git(bare, 'init -q --bare');
+
+    const broken = join(reposRoot, 'broken');
+    mkdirSync(broken);
+    writeFileSync(join(broken, '.git'), 'gitdir: /nowhere');
+
+    const result = sabConfig('briefing', env);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('working');
+    expect(result.stdout).toContain('Skipped 2 repos');
+    expect(result.stdout).toContain('bare.git (bare)');
+    expect(result.stdout).toContain('broken (read-error)');
+  });
+
   it('Stale Branches subsection is omitted when no branches are stale', () => {
     const reposRoot = dirname(env.configPath);
     const repoPath = join(reposRoot, 'demo');

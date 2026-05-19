@@ -219,19 +219,32 @@ interface StaleBranch {
   daysSinceCommit: number;
 }
 
+interface SkippedRepo {
+  name: string;
+  reason: 'bare' | 'read-error';
+}
+
 function collectRepoState(
   db: ReturnType<typeof getDb>,
   config: ReturnType<typeof loadConfig>,
   activeContext: string,
-): { repos: RepoStateEntry[]; staleBranches: StaleBranch[] } {
+): { repos: RepoStateEntry[]; staleBranches: StaleBranch[]; skipped: SkippedRepo[] } {
   const reposDir = resolvePath(config.repos_dir);
-  const discovered = discoverRepos(reposDir).filter((r) => r.kind === 'working');
-  if (discovered.length === 0) return { repos: [], staleBranches: [] };
+  const allDiscovered = discoverRepos(reposDir);
+  const skipped: SkippedRepo[] = allDiscovered
+    .filter((r) => r.kind !== 'working')
+    .map((r) => ({ name: r.name, reason: r.kind === 'bare' ? 'bare' : 'read-error' }));
+  const discovered = allDiscovered.filter((r) => r.kind === 'working');
+  if (discovered.length === 0 && skipped.length === 0) {
+    return { repos: [], staleBranches: [], skipped: [] };
+  }
 
   const ctx = getContext(db, activeContext);
   const allowed = ctx && ctx.repos.length > 0 ? new Set(ctx.repos) : null;
   const filtered = allowed ? discovered.filter((r) => allowed.has(r.name)) : discovered;
-  if (filtered.length === 0) return { repos: [], staleBranches: [] };
+  if (filtered.length === 0 && skipped.length === 0) {
+    return { repos: [], staleBranches: [], skipped: [] };
+  }
 
   const commitQuery = db.prepare(
     `SELECT c.sha, c.message, c.author_ts, t.title as task_title
@@ -271,11 +284,15 @@ function collectRepoState(
     };
   });
 
-  return { repos, staleBranches };
+  return { repos, staleBranches, skipped };
 }
 
-function renderRepoState(state: { repos: RepoStateEntry[]; staleBranches: StaleBranch[] }): string[] {
-  if (state.repos.length === 0) return [];
+function renderRepoState(state: {
+  repos: RepoStateEntry[];
+  staleBranches: StaleBranch[];
+  skipped: SkippedRepo[];
+}): string[] {
+  if (state.repos.length === 0 && state.skipped.length === 0) return [];
   const lines: string[] = [];
   for (const repo of state.repos) {
     const dirtyLabel = repo.dirty ? c.amber('✘ dirty') : c.muted('✓ clean');
@@ -298,6 +315,16 @@ function renderRepoState(state: { repos: RepoStateEntry[]; staleBranches: StaleB
         c.amber(`    ${b.repo}/${b.branch}  (${b.daysSinceCommit}d since last commit)`),
       );
     }
+  }
+
+  if (state.skipped.length > 0) {
+    if (state.repos.length > 0 || state.staleBranches.length > 0) lines.push('');
+    const summary = state.skipped
+      .map((s) => `${s.name} (${s.reason})`)
+      .join(', ');
+    lines.push(
+      c.muted(`  Skipped ${state.skipped.length} repo${state.skipped.length === 1 ? '' : 's'}: ${summary}`),
+    );
   }
 
   return lines;

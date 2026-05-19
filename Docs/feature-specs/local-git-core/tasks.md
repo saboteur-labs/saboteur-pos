@@ -108,6 +108,7 @@
 **Depends on:** 9
 **Estimate:** 2
 **Notes:** Satisfies spec FR #8.
+**Done:** [x]
 
 ### Task 12: Show linked commits in `sab task view`
 
