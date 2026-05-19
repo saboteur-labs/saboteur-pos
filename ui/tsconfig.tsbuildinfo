@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./vite.config.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/ui/button.tsx","./src/components/ui/card.tsx","./src/components/ui/scroll-area.tsx","./src/components/ui/separator.tsx","./src/components/ui/tabs.tsx","./src/lib/utils.ts","./vite.config.ts"],"version":"5.9.3"}
