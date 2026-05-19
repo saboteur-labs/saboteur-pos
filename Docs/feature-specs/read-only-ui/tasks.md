@@ -144,7 +144,7 @@
 **Done when:** Selecting a note renders its body; clicking a wiki-link to an existing note swaps the right pane to that note; broken wiki-links render disabled.
 **Depends on:** 12
 **Estimate:** 3
-**Done:** []
+**Done:** [x]
 
 ### Task 16: `sab ui` serves built bundle from disk
 

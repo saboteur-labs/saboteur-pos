@@ -4,15 +4,7 @@ import { startSocket } from './state/socket'
 import { AppShell } from './components/AppShell'
 import { BriefingView } from './views/BriefingView'
 import { TasksView } from './views/TasksView'
-
-function NotesView() {
-  const { notes } = useStore()
-  return (
-    <div className="p-6 font-mono text-sm text-muted-foreground">
-      Notes — {notes.length} items
-    </div>
-  )
-}
+import { NotesView } from './views/NotesView'
 
 export default function App() {
   const { selectedView, fetchBriefing, fetchTasks, fetchNotes } = useStore()
@@ -34,7 +26,7 @@ export default function App() {
       {section === 'briefing' && <BriefingView />}
 
       {section === 'tasks' && <TasksView />}
-      {section === 'notes'    && <NotesView />}
+      {section === 'notes' && <NotesView />}
     </AppShell>
   )
 }
