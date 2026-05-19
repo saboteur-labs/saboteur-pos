@@ -38,6 +38,7 @@
 **Depends on:** 3
 **Estimate:** 3
 **Notes:** Satisfies spec FR #2, FR #7 (detached HEAD), FR #11 (local-only). Use `git -C <path> ...` for isolation.
+**Done:** [x]
 
 ### Task 5: Commit-message task-ID parser
 
