@@ -135,7 +135,7 @@
 **Done when:** Switching between `today / active / backlog / blocked / review / deep-work / stale` updates the displayed list to match the API response for each view.
 **Depends on:** 12
 **Estimate:** 3
-**Done:** []
+**Done:** [x]
 
 ### Task 15: Notes view with click-to-read and wiki-link navigation
 

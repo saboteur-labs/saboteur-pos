@@ -3,15 +3,7 @@ import { useStore } from './state/store'
 import { startSocket } from './state/socket'
 import { AppShell } from './components/AppShell'
 import { BriefingView } from './views/BriefingView'
-
-function TasksView() {
-  const { tasks, selectedView } = useStore()
-  return (
-    <div className="p-6 font-mono text-sm text-muted-foreground">
-      Tasks ({selectedView}) — {tasks.length} items
-    </div>
-  )
-}
+import { TasksView } from './views/TasksView'
 
 function NotesView() {
   const { notes } = useStore()
@@ -41,7 +33,7 @@ export default function App() {
     <AppShell>
       {section === 'briefing' && <BriefingView />}
 
-      {section === 'tasks'    && <TasksView />}
+      {section === 'tasks' && <TasksView />}
       {section === 'notes'    && <NotesView />}
     </AppShell>
   )
