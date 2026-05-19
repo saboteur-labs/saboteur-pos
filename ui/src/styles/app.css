@@ -1,0 +1,54 @@
+@import './tokens.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * shadcn/ui semantic variables — HSL values derived from brand tokens.
+ * HSL format (no hsl() wrapper) lets Tailwind compose opacity: bg-primary/90.
+ *
+ * Brand hex → HSL mapping:
+ *   brand-black   #0a0a0a  →  0 0% 4%
+ *   brand-white   #f5f4f0  →  48 20% 95%
+ *   brand-red     #d44040  →  0 63% 54%
+ *   brand-mid     #6a6864  →  40 3% 40%
+ *   brand-dim     #2e2e2c  →  60 2% 18%
+ *   brand-surface #111110  →  60 3% 6%
+ *   brand-surface2 #161614 →  60 5% 8%
+ */
+@layer base {
+  :root {
+    --background: 0 0% 4%;
+    --foreground: 48 20% 95%;
+
+    --card: 60 3% 6%;
+    --card-foreground: 48 20% 95%;
+
+    --popover: 60 5% 8%;
+    --popover-foreground: 48 20% 95%;
+
+    --primary: 0 63% 54%;
+    --primary-foreground: 48 20% 95%;
+
+    --secondary: 60 5% 8%;
+    --secondary-foreground: 48 20% 95%;
+
+    --muted: 60 3% 6%;
+    --muted-foreground: 40 3% 40%;
+
+    --accent: 60 2% 18%;
+    --accent-foreground: 48 20% 95%;
+
+    --destructive: 0 63% 54%;
+    --destructive-foreground: 48 20% 95%;
+
+    --border: 60 2% 18%;
+    --input: 60 2% 18%;
+    --ring: 0 63% 54%;
+
+    --radius: var(--radius-md);
+  }
+}
+
+/* Project-specific styles below — this is the only file for bespoke styles. */

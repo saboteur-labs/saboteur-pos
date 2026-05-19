@@ -20,6 +20,7 @@ import { runNoteEdit } from './commands/note/edit.js';
 import { runNoteFind } from './commands/note/find.js';
 import { runSync } from './commands/sync.js';
 import { runBriefing } from './commands/briefing.js';
+import { runUi, runUiStop } from './commands/ui.js';
 
 const program = new Command();
 
@@ -268,5 +269,18 @@ program
   .description('Rebuild the knowledge index from all enabled sources')
   .option('--config <path>', 'Path to config file')
   .action((options) => runSync(options));
+
+// ── sab ui ───────────────────────────────────────────────────────────────────
+const ui = program.command('ui').description('Manage the read-only UI server');
+
+ui
+  .command('start', { isDefault: true })
+  .description('Start the UI server at http://127.0.0.1:9421')
+  .action(() => runUi());
+
+ui
+  .command('stop')
+  .description('Stop the UI server')
+  .action(() => runUiStop());
 
 program.parse(process.argv);

@@ -3,12 +3,15 @@
   "version": "0.1.0",
   "description": "Personal Operating System — CLI for task and note management",
   "type": "module",
+  "workspaces": [
+    "ui"
+  ],
   "bin": {
     "sab": "./bin/sab.js"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc && chmod +x bin/sab.js",
+    "build": "tsc && npm --prefix ui run build && node_modules/.bin/esbuild ui/server/start.ts --bundle --packages=external --platform=node --format=esm --outfile=dist/server.js && chmod +x bin/sab.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -21,11 +24,15 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
     "esbuild": "^0.23.0",
     "execa": "^9.3.0",
     "tsx": "^4.17.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
+  },
+  "overrides": {
+    "vite": "^5.4.21"
   },
   "volta": {
     "node": "24.15.0"
