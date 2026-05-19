@@ -173,12 +173,12 @@ Key work:
 
 Key decisions already made:
 
-- Port: `9421` (fixed)
-- Data source: reads directly from SQLite and notes directory (not CLI parsing)
-- Read-only: no mutations through the UI in Phase 2
-- `sab ui` starts and confirms, then exits — process lifecycle is the user's responsibility
-- `sab ui` is idempotent: if port is already in use, report and exit cleanly
-- Views: Briefing (default), Tasks (with view filters), Notes (click to read)
+- [x] Port: `9421` (fixed)
+- [x] Data source: reads directly from SQLite and notes directory (not CLI parsing)
+- [x] Read-only: no mutations through the UI in Phase 2
+- [x] `sab ui` starts and confirms, then exits — process lifecycle is the user's responsibility
+- [x] `sab ui` is idempotent: if port is already in use, report and exit cleanly
+- [x] Views: Briefing (default), Tasks (with view filters), Notes (click to read)
 
 ---
 
