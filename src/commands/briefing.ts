@@ -7,7 +7,16 @@ import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
 import { discoverRepos } from '../git/discover.js';
 import { indexCommits } from '../git/index-job.js';
-import { getBranchLastActivity, getHeadState, isDirty, listBranches } from '../git/read.js';
+import {
+  GitTimeoutError,
+  getBranchLastActivity,
+  getHeadState,
+  isDirty,
+  listBranches,
+  withGitTimeout,
+} from '../git/read.js';
+
+const BRIEFING_GIT_TIMEOUT_MS = 500;
 
 interface BriefingOptions {
   context?: string;
@@ -26,7 +35,7 @@ export function runBriefing(options: BriefingOptions): void {
   incrementalSync(db, config);
 
   // Refresh git → task commit links before rendering repo state.
-  indexCommits(db, config);
+  const indexResult = indexCommits(db, config);
 
   const activeContext = options.context ?? config.active_context;
   const staleDays = config.briefing.stale_task_days;
@@ -103,7 +112,7 @@ export function runBriefing(options: BriefingOptions): void {
   }
 
   // Collect repo state before closing DB
-  const repoState = collectRepoState(db, config, activeContext);
+  const repoState = collectRepoState(db, config, activeContext, indexResult.timedOut);
 
   db.close();
 
@@ -221,28 +230,32 @@ interface StaleBranch {
 
 interface SkippedRepo {
   name: string;
-  reason: 'bare' | 'read-error';
+  reason: 'bare' | 'read-error' | 'timeout';
 }
 
 function collectRepoState(
   db: ReturnType<typeof getDb>,
   config: ReturnType<typeof loadConfig>,
   activeContext: string,
+  timedOutFromIndex: string[] = [],
 ): { repos: RepoStateEntry[]; staleBranches: StaleBranch[]; skipped: SkippedRepo[] } {
   const reposDir = resolvePath(config.repos_dir);
   const allDiscovered = discoverRepos(reposDir);
   const skipped: SkippedRepo[] = allDiscovered
     .filter((r) => r.kind !== 'working')
     .map((r) => ({ name: r.name, reason: r.kind === 'bare' ? 'bare' : 'read-error' }));
+  const timedOutSet = new Set(timedOutFromIndex);
   const discovered = allDiscovered.filter((r) => r.kind === 'working');
-  if (discovered.length === 0 && skipped.length === 0) {
+  if (discovered.length === 0 && skipped.length === 0 && timedOutSet.size === 0) {
     return { repos: [], staleBranches: [], skipped: [] };
   }
 
   const ctx = getContext(db, activeContext);
   const allowed = ctx && ctx.repos.length > 0 ? new Set(ctx.repos) : null;
-  const filtered = allowed ? discovered.filter((r) => allowed.has(r.name)) : discovered;
-  if (filtered.length === 0 && skipped.length === 0) {
+  const filtered = allowed
+    ? discovered.filter((r) => allowed.has(r.name))
+    : discovered;
+  if (filtered.length === 0 && skipped.length === 0 && timedOutSet.size === 0) {
     return { repos: [], staleBranches: [], skipped: [] };
   }
 
@@ -259,30 +272,45 @@ function collectRepoState(
   const now = Date.now();
   const staleBranches: StaleBranch[] = [];
 
-  const repos = filtered.map((repo) => {
-    const head = getHeadState(repo.path);
-    const headLabel = head.kind === 'branch' ? head.name : `detached @ ${head.sha}`;
+  const repos: RepoStateEntry[] = [];
+  for (const repo of filtered) {
+    if (timedOutSet.has(repo.name)) {
+      skipped.push({ name: repo.name, reason: 'timeout' });
+      continue;
+    }
+    try {
+      withGitTimeout(BRIEFING_GIT_TIMEOUT_MS, () => {
+        const head = getHeadState(repo.path);
+        const headLabel = head.kind === 'branch' ? head.name : `detached @ ${head.sha}`;
 
-    for (const branch of listBranches(repo.path)) {
-      const lastActivity = getBranchLastActivity(repo.path, branch);
-      if (!lastActivity) continue;
-      const ageMs = now - new Date(lastActivity).getTime();
-      if (ageMs > staleThresholdMs) {
-        staleBranches.push({
-          repo: repo.name,
-          branch,
-          daysSinceCommit: Math.floor(ageMs / (24 * 60 * 60 * 1000)),
+        for (const branch of listBranches(repo.path)) {
+          const lastActivity = getBranchLastActivity(repo.path, branch);
+          if (!lastActivity) continue;
+          const ageMs = now - new Date(lastActivity).getTime();
+          if (ageMs > staleThresholdMs) {
+            staleBranches.push({
+              repo: repo.name,
+              branch,
+              daysSinceCommit: Math.floor(ageMs / (24 * 60 * 60 * 1000)),
+            });
+          }
+        }
+
+        repos.push({
+          name: repo.name,
+          headLabel,
+          dirty: isDirty(repo.path),
+          commits: commitQuery.all(repo.name, activeContext) as RepoStateEntry['commits'],
         });
+      });
+    } catch (err) {
+      if (err instanceof GitTimeoutError) {
+        skipped.push({ name: repo.name, reason: 'timeout' });
+      } else {
+        throw err;
       }
     }
-
-    return {
-      name: repo.name,
-      headLabel,
-      dirty: isDirty(repo.path),
-      commits: commitQuery.all(repo.name, activeContext) as RepoStateEntry['commits'],
-    };
-  });
+  }
 
   return { repos, staleBranches, skipped };
 }

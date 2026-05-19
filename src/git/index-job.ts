@@ -4,19 +4,22 @@ import { upsertCommit, type CommitInput } from '../db/commits.js';
 import { resolvePath } from '../config.js';
 import { discoverRepos } from './discover.js';
 import { extractTaskIds } from './parse.js';
-import { getCommitsSince, listBranches } from './read.js';
+import { GitTimeoutError, getCommitsSince, listBranches, withGitTimeout } from './read.js';
 
 export interface IndexCommitsOptions {
   horizonDays?: number;
+  perRepoTimeoutMs?: number;
 }
 
 export interface IndexCommitsResult {
   reposScanned: number;
   commitsIndexed: number;
   tasksUpdated: number;
+  timedOut: string[];
 }
 
 const DEFAULT_HORIZON_DAYS = 60;
+const DEFAULT_PER_REPO_TIMEOUT_MS = 500;
 
 interface TaskBranchUpdate {
   repo: string;
@@ -38,37 +41,49 @@ export function indexCommits(
   );
 
   const since = new Date(Date.now() - horizonDays * 24 * 60 * 60 * 1000).toISOString();
+  const perRepoTimeoutMs = options.perRepoTimeoutMs ?? DEFAULT_PER_REPO_TIMEOUT_MS;
   const toUpsert: CommitInput[] = [];
   const seenShas = new Set<string>();
   const latestPerTask = new Map<string, TaskBranchUpdate>();
+  const timedOut: string[] = [];
 
   for (const repo of repos) {
-    const branches = listBranches(repo.path);
-    const refs = branches.length > 0 ? branches : [undefined];
+    try {
+      withGitTimeout(perRepoTimeoutMs, () => {
+        const branches = listBranches(repo.path);
+        const refs = branches.length > 0 ? branches : [undefined];
 
-    for (const ref of refs) {
-      const commits = getCommitsSince(repo.path, since, ref);
-      for (const c of commits) {
-        if (seenShas.has(c.sha)) continue;
-        const ids = extractTaskIds(c.message);
-        const knownId = ids.find((id) => taskIds.has(id));
-        if (!knownId) continue;
+        for (const ref of refs) {
+          const commits = getCommitsSince(repo.path, since, ref);
+          for (const c of commits) {
+            if (seenShas.has(c.sha)) continue;
+            const ids = extractTaskIds(c.message);
+            const knownId = ids.find((id) => taskIds.has(id));
+            if (!knownId) continue;
 
-        seenShas.add(c.sha);
-        const branch = ref ?? null;
-        toUpsert.push({
-          sha: c.sha,
-          repo: repo.name,
-          branch,
-          task_id: knownId,
-          message: c.message,
-          author_ts: c.author_ts,
-        });
+            seenShas.add(c.sha);
+            const branch = ref ?? null;
+            toUpsert.push({
+              sha: c.sha,
+              repo: repo.name,
+              branch,
+              task_id: knownId,
+              message: c.message,
+              author_ts: c.author_ts,
+            });
 
-        const prev = latestPerTask.get(knownId);
-        if (!prev || c.author_ts > prev.author_ts) {
-          latestPerTask.set(knownId, { repo: repo.name, branch, author_ts: c.author_ts });
+            const prev = latestPerTask.get(knownId);
+            if (!prev || c.author_ts > prev.author_ts) {
+              latestPerTask.set(knownId, { repo: repo.name, branch, author_ts: c.author_ts });
+            }
+          }
         }
+      });
+    } catch (err) {
+      if (err instanceof GitTimeoutError) {
+        timedOut.push(repo.name);
+      } else {
+        throw err;
       }
     }
   }
@@ -93,5 +108,6 @@ export function indexCommits(
     reposScanned: repos.length,
     commitsIndexed: toUpsert.length,
     tasksUpdated,
+    timedOut,
   };
 }

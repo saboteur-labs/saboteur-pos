@@ -11,17 +11,46 @@ export interface Commit {
 const FIELD = '\x1f';
 const RECORD = '\x1e';
 
+export class GitTimeoutError extends Error {
+  constructor(public readonly timeoutMs: number) {
+    super(`git timed out after ${timeoutMs}ms`);
+    this.name = 'GitTimeoutError';
+  }
+}
+
+let currentTimeoutMs: number | undefined = undefined;
+
+export function withGitTimeout<T>(timeoutMs: number, fn: () => T): T {
+  const prev = currentTimeoutMs;
+  currentTimeoutMs = timeoutMs;
+  try {
+    return fn();
+  } finally {
+    currentTimeoutMs = prev;
+  }
+}
+
 function gitRun(repoPath: string, args: string[]): string {
-  return execFileSync('git', ['-C', repoPath, ...args], {
-    encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  try {
+    return execFileSync('git', ['-C', repoPath, ...args], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      timeout: currentTimeoutMs,
+    });
+  } catch (err: unknown) {
+    const e = err as { code?: string; signal?: string };
+    if (currentTimeoutMs !== undefined && (e.code === 'ETIMEDOUT' || e.signal === 'SIGTERM')) {
+      throw new GitTimeoutError(currentTimeoutMs);
+    }
+    throw err;
+  }
 }
 
 function gitRunSafe(repoPath: string, args: string[]): string | null {
   try {
     return gitRun(repoPath, args);
-  } catch {
+  } catch (err) {
+    if (err instanceof GitTimeoutError) throw err;
     return null;
   }
 }

@@ -128,6 +128,7 @@
 **Depends on:** 7, 11
 **Estimate:** 2
 **Notes:** Satisfies spec FR #12. Use `child_process.spawn` with a per-call timeout.
+**Done:** [x]
 
 ### Task 14: Weekly briefing
 

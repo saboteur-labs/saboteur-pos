@@ -156,6 +156,35 @@ describe('indexCommits', () => {
     expect(second.tasksUpdated).toBe(0);
   });
 
+  it('marks a repo as timed out when per-repo timeout is exceeded', () => {
+    seedTask(db, 'task_a1b2c3d4');
+    const repo = join(root, 'demo');
+    mkdirSync(repo);
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'a.txt', '1', 'work [task_a1b2c3d4]');
+
+    const result = indexCommits(db, configFor(root), { perRepoTimeoutMs: 1 });
+    expect(result.timedOut).toContain('demo');
+    // The commit should not have been indexed since the git call timed out.
+    expect(result.commitsIndexed).toBe(0);
+  });
+
+  it('completes scanning a small fleet of repos well under the 2s budget', () => {
+    const N = 5;
+    for (let i = 0; i < N; i += 1) {
+      const repo = join(root, `repo-${i}`);
+      mkdirSync(repo);
+      git(repo, 'init -q -b main');
+      makeCommit(repo, 'a.txt', String(i), `commit-${i}`);
+    }
+    const start = Date.now();
+    const result = indexCommits(db, configFor(root));
+    const elapsed = Date.now() - start;
+    expect(result.reposScanned).toBe(N);
+    expect(result.timedOut).toEqual([]);
+    expect(elapsed).toBeLessThan(2000);
+  });
+
   it('respects the horizon window', () => {
     seedTask(db, 'task_a1b2c3d4');
     const repo = join(root, 'demo');
