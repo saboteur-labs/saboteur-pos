@@ -20,7 +20,7 @@ import { runNoteEdit } from './commands/note/edit.js';
 import { runNoteFind } from './commands/note/find.js';
 import { runSync } from './commands/sync.js';
 import { runBriefing } from './commands/briefing.js';
-import { runUi } from './commands/ui.js';
+import { runUi, runUiStop } from './commands/ui.js';
 
 const program = new Command();
 
@@ -271,9 +271,16 @@ program
   .action((options) => runSync(options));
 
 // ── sab ui ───────────────────────────────────────────────────────────────────
-program
-  .command('ui')
-  .description('Start the read-only UI server at http://127.0.0.1:9421')
+const ui = program.command('ui').description('Manage the read-only UI server');
+
+ui
+  .command('start', { isDefault: true })
+  .description('Start the UI server at http://127.0.0.1:9421')
   .action(() => runUi());
+
+ui
+  .command('stop')
+  .description('Stop the UI server')
+  .action(() => runUiStop());
 
 program.parse(process.argv);
