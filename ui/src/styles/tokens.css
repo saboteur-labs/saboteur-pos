@@ -1,0 +1,82 @@
+/*
+ * saboteur-base.css
+ * Shared brand tokens for all Saboteur products.
+ * Import this before any product-specific theme file.
+ *
+ * Usage in Tailwind v4:
+ *   @import "saboteur-base.css";
+ *   @import "offbeat-fm-theme.css"; — or getwrite-theme.css
+ *
+ * All products share these tokens. Product files extend or override
+ * where needed — they do not redefine what is already here.
+ */
+:root {
+    /* ── BRAND COLORS ── */
+    --color-brand-black: #0a0a0a; /* bg-brand-black  | Primary background */
+    --color-brand-white: #f5f4f0; /* bg-brand-white  | Primary text, light bg. Warm — not pure white. */
+    --color-brand-red: #d44040; /* bg-brand-red    | Signal Red. Structure and interaction only. */
+    --color-brand-mid: #6a6864; /* bg-brand-mid    | Secondary text, muted labels */
+    --color-brand-dim: #2e2e2c; /* bg-brand-dim    | Borders, rules */
+    --color-brand-rule: #1a1a18; /* bg-brand-rule   | Divider lines */
+    --color-brand-surface: #111110; /* bg-brand-surface  | Raised dark surfaces */
+    --color-brand-surface2: #161614; /* bg-brand-surface2 | Deeper dark surfaces */
+
+    /* ── BRAND TYPOGRAPHY ── */
+    --font-display:
+        "IBM Plex Sans Condensed", sans-serif; /* Wordmarks, major headings */
+    --font-sans: "IBM Plex Sans", sans-serif; /* UI, body */
+    --font-mono: "IBM Plex Mono", monospace; /* Labels, metadata, descriptors */
+    --font-serif: "IBM Plex Serif", serif; /* GetWrite editor surface only */
+
+    /* ── BRAND FONT WEIGHTS ── */
+    --font-weight-regular: 400;
+    --font-weight-medium: 500;
+    --font-weight-bold: 700;
+
+    /* ── BRAND LETTER SPACING ── */
+    --tracking-wordmark: -0.04em; /* tracking-wordmark   | Condensed wordmark at hero */
+    --tracking-display: -0.03em; /* tracking-display    | Display headings */
+    --tracking-heading: -0.02em; /* tracking-heading    | h1 level */
+    --tracking-body: 0em; /* tracking-body       | Default body */
+    --tracking-label: 0.14em; /* tracking-label      | Mono labels */
+    --tracking-label-wide: 0.18em; /* tracking-label-wide | Mono descriptors */
+    --tracking-label-xl: 0.22em; /* tracking-label-xl   | Mono hero descriptors */
+    --tracking-micro: 0.1em; /* tracking-micro      | Small mono */
+
+    /* ── BRAND SPACING ── */
+    /* All multiples of 4px base unit */
+    --spacing-1: 4px;
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --spacing-4: 16px;
+    --spacing-5: 20px;
+    --spacing-6: 24px;
+    --spacing-8: 32px;
+    --spacing-10: 40px;
+    --spacing-12: 48px;
+    --spacing-16: 64px;
+    --spacing-20: 80px;
+
+    /* ── BRAND BORDER RADIUS ── */
+    --radius-sm: 3px; /* radius-sm  | Tags, chips, badges */
+    --radius-md: 5px; /* radius-md  | Buttons, inputs */
+    --radius-lg: 8px; /* radius-lg  | Cards */
+    --radius-xl: 12px; /* radius-xl  | Modals, large containers */
+
+    /* ── BRAND BORDERS ── */
+    --border-width-hairline: 0.5px; /* border-hairline | Default UI borders */
+    --border-width-thin: 1px; /* border-thin     | Emphasized borders */
+    --border-width-bar: 3px; /* border-bar      | Sub-brand left bars */
+    --border-width-mark: 4px; /* border-mark     | Primary mark left bar */
+
+    /* ── BRAND LINE HEIGHT ── */
+    --leading-tight: 1.05; /* leading-tight     | Hero/display headings */
+    --leading-snug: 1.3; /* leading-snug      | h1, h2 */
+    --leading-normal: 1.6; /* leading-normal    | h3, UI body */
+    --leading-relaxed: 1.8; /* leading-relaxed   | Descriptions, small body */
+    --leading-editorial: 2; /* leading-editorial | Wide reading mode */
+
+    /* ── BRAND TRANSITIONS ── */
+    --transition-fast: 150ms ease; /* transition-fast   | Color, border, opacity */
+    --transition-normal: 200ms ease; /* transition-normal | Layout, transform */
+}

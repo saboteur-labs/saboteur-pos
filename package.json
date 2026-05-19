@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Personal Operating System — CLI for task and note management",
   "type": "module",
+  "workspaces": [
+    "ui"
+  ],
   "bin": {
     "sab": "./bin/sab.js"
   },
@@ -26,6 +29,9 @@
     "tsx": "^4.17.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
+  },
+  "overrides": {
+    "vite": "^5.4.21"
   },
   "volta": {
     "node": "24.15.0"
