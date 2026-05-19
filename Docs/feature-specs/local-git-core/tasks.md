@@ -48,6 +48,7 @@
 **Depends on:** none
 **Estimate:** 1
 **Notes:** Satisfies spec FR #3 and FR #4.
+**Done:** [x]
 
 ### Task 6: Commits DB layer
 
