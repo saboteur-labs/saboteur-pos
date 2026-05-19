@@ -21,6 +21,7 @@ const BRIEFING_GIT_TIMEOUT_MS = 500;
 interface BriefingOptions {
   context?: string;
   config?: string;
+  weekly?: boolean;
 }
 
 const PRIORITY_ORDER = ['critical', 'high', 'normal', 'low'];
@@ -30,6 +31,11 @@ export function runBriefing(options: BriefingOptions): void {
   const configPath = resolvePath(options.config ?? DEFAULT_CONFIG_PATH);
   const config = loadConfig(configPath);
   const db = getDb(resolvePath(config.db_path));
+
+  if (options.weekly) {
+    runWeeklyBriefing(db, config, options);
+    return;
+  }
 
   // Auto incremental sync before querying notes
   incrementalSync(db, config);
@@ -356,4 +362,107 @@ function renderRepoState(state: {
   }
 
   return lines;
+}
+
+interface WeeklyTask {
+  id: string;
+  title: string;
+  state: string;
+  state_history: string;
+}
+
+function runWeeklyBriefing(
+  db: ReturnType<typeof getDb>,
+  config: ReturnType<typeof loadConfig>,
+  options: BriefingOptions,
+): void {
+  // Refresh git data so commit counts are current
+  indexCommits(db, config);
+
+  const activeContext = options.context ?? config.active_context;
+  const cutoffIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const rows = db
+    .prepare(
+      `SELECT id, title, state, state_history FROM tasks WHERE context_id = ?`,
+    )
+    .all(activeContext) as WeeklyTask[];
+
+  const shipped: Array<{ id: string; title: string }> = [];
+  const stalled: Array<{ id: string; title: string; state: string; daysIdle: number }> = [];
+  const now = Date.now();
+
+  for (const row of rows) {
+    const hist = JSON.parse(row.state_history) as Array<{
+      state: string;
+      timestamp: string;
+      reason?: string;
+    }>;
+    const shippedInWindow = hist.some(
+      (e) => e.state === 'done' && e.timestamp >= cutoffIso,
+    );
+    if (shippedInWindow) {
+      shipped.push({ id: row.id, title: row.title });
+      continue;
+    }
+    if (row.state === 'active' || row.state === 'blocked') {
+      const last = hist[hist.length - 1];
+      if (last && last.timestamp < cutoffIso) {
+        const ageDays = Math.floor((now - new Date(last.timestamp).getTime()) / (24 * 60 * 60 * 1000));
+        stalled.push({ id: row.id, title: row.title, state: row.state, daysIdle: ageDays });
+      }
+    }
+  }
+
+  const repoActivity = db
+    .prepare(
+      `SELECT repo, COUNT(*) as count FROM commits
+        WHERE author_ts >= ?
+        GROUP BY repo
+        ORDER BY count DESC, repo ASC`,
+    )
+    .all(cutoffIso) as Array<{ repo: string; count: number }>;
+
+  db.close();
+
+  const lines: string[] = [];
+  lines.push(
+    c.label('── Weekly Briefing — ') +
+      c.cyan(activeContext) +
+      c.label(' (last 7 days) ─────────'),
+  );
+  lines.push('');
+
+  lines.push(c.label('Shipped'));
+  if (shipped.length === 0) {
+    lines.push(c.muted('  (none)'));
+  } else {
+    for (const t of shipped) {
+      lines.push(`  ${c.muted(t.id)}  ${t.title}`);
+    }
+  }
+  lines.push('');
+
+  lines.push(c.label('Stalled'));
+  if (stalled.length === 0) {
+    lines.push(c.muted('  (none)'));
+  } else {
+    for (const t of stalled) {
+      lines.push(
+        c.amber(`  ${t.id}  ${t.title}  (${t.state}, ${t.daysIdle}d idle)`),
+      );
+    }
+  }
+  lines.push('');
+
+  lines.push(c.label('Repo Activity'));
+  if (repoActivity.length === 0) {
+    lines.push(c.muted('  (no commits in window)'));
+  } else {
+    for (const r of repoActivity) {
+      lines.push(`  ${c.cyan(r.repo.padEnd(20))}  ${r.count} commit${r.count === 1 ? '' : 's'}`);
+    }
+  }
+
+  process.stdout.write(lines.join('\n') + '\n');
 }

@@ -260,6 +260,7 @@ program
   .command('briefing')
   .description('Run the daily briefing (read-only)')
   .option('--context <slug>', 'Run briefing for a different context')
+  .option('--weekly', 'Run the weekly briefing instead of the daily one')
   .option('--config <path>', 'Path to config file')
   .action((options) => runBriefing(options));
 

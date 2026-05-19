@@ -138,6 +138,7 @@
 **Depends on:** 7, 9
 **Estimate:** 5
 **Notes:** Satisfies spec FR #10. PHASES.md explicitly flags this as more complex than it appears — budget for state-history parsing and timestamp aggregation.
+**Done:** [x]
 
 ---
 

@@ -256,6 +256,88 @@ describe('Layer 6 — Daily Briefing', () => {
     expect(result.stdout).not.toContain('Stale Branches');
   });
 
+  it('--weekly aggregates shipped, stalled, and repo activity over the last 7 days', async () => {
+    const Database = (await import('better-sqlite3')).default;
+
+    const shippedIds: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const id = extractId(sabConfig(`task add "Shipped ${i}"`, env).stdout);
+      sabConfig(`task move ${id} active`, env);
+      sabConfig(`task move ${id} review`, env);
+      sabConfig(`task move ${id} done`, env);
+      shippedIds.push(id);
+    }
+
+    const stalledIds: string[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const id = extractId(sabConfig(`task add "Stalled ${i}"`, env).stdout);
+      sabConfig(`task move ${id} active`, env);
+      stalledIds.push(id);
+    }
+    // Backdate the latest state_history entry on stalled tasks beyond the 7-day window
+    {
+      const db = new Database(env.dbPath);
+      const oldIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      for (const id of stalledIds) {
+        const row = db.prepare(`SELECT state_history FROM tasks WHERE id = ?`).get(id) as {
+          state_history: string;
+        };
+        const hist = JSON.parse(row.state_history);
+        for (const e of hist) e.timestamp = oldIso;
+        db.prepare(`UPDATE tasks SET state_history = ?, updated_at = ? WHERE id = ?`).run(
+          JSON.stringify(hist),
+          oldIso,
+          id,
+        );
+      }
+      db.close();
+    }
+
+    const reposRoot = dirname(env.configPath);
+    const repoSpecs: Array<{ name: string; count: number }> = [
+      { name: 'alpha', count: 3 },
+      { name: 'beta', count: 1 },
+      { name: 'gamma', count: 2 },
+      { name: 'delta', count: 0 },
+    ];
+    for (const spec of repoSpecs) {
+      const path = join(reposRoot, spec.name);
+      mkdirSync(path);
+      git(path, 'init -q -b main');
+      // delta repo has no commits → omitted from activity table
+      for (let i = 0; i < spec.count; i += 1) {
+        makeCommit(path, `f${i}.txt`, String(i), `${spec.name} [${shippedIds[0]}] commit ${i}`);
+      }
+    }
+
+    const result = sabConfig('briefing --weekly', env);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Weekly Briefing');
+    expect(result.stdout).toContain('Shipped');
+    for (let i = 0; i < 3; i += 1) {
+      expect(result.stdout).toContain(`Shipped ${i}`);
+    }
+    expect(result.stdout).toContain('Stalled');
+    expect(result.stdout).toContain('Stalled 0');
+    expect(result.stdout).toContain('Stalled 1');
+    expect(result.stdout).toContain('Repo Activity');
+    expect(result.stdout).toContain('alpha');
+    expect(result.stdout).toContain('beta');
+    expect(result.stdout).toContain('gamma');
+    expect(result.stdout).not.toContain('delta'); // no commits → omitted from activity
+    // alpha (3 commits) must rank before beta (1 commit) in the table
+    expect(result.stdout.indexOf('alpha')).toBeLessThan(result.stdout.indexOf('beta'));
+  });
+
+  it('--weekly does not render the daily-briefing sections', () => {
+    const id = extractId(sabConfig('task add "Some task"', env).stdout);
+    sabConfig(`task move ${id} active`, env);
+    const result = sabConfig('briefing --weekly', env);
+    expect(result.stdout).not.toContain('── Active Tasks');
+    expect(result.stdout).not.toContain('── Inbox');
+    expect(result.stdout).toContain('Weekly Briefing');
+  });
+
   it('briefing is read-only — does not modify data', () => {
     const id = extractId(sabConfig('task add "Read only test"', env).stdout);
     sabConfig(`task move ${id} active`, env);
