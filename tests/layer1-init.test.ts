@@ -39,6 +39,28 @@ describe('Layer 1 — Init + Status', () => {
     expect(config.briefing.provider_timeout_ms).toBe(2000); // Phase 2c stub present
     expect(config.repos_dir).toBeDefined(); // Phase 2a stub present
   });
+
+  it('commits table exists with expected columns and indexes', async () => {
+    const Database = (await import('better-sqlite3')).default;
+    const db = new Database(env.dbPath, { readonly: true });
+    const cols = db
+      .prepare(`PRAGMA table_info(commits)`)
+      .all() as Array<{ name: string; type: string; notnull: number }>;
+    const colNames = cols.map((c) => c.name).sort();
+    expect(colNames).toEqual(
+      ['author_ts', 'branch', 'message', 'repo', 'sha', 'task_id'].sort(),
+    );
+    const shaCol = cols.find((c) => c.name === 'sha')!;
+    expect(shaCol.type.toUpperCase()).toBe('TEXT');
+    const idx = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='commits'`)
+      .all() as Array<{ name: string }>;
+    const idxNames = idx.map((i) => i.name);
+    expect(idxNames).toContain('idx_commits_task');
+    expect(idxNames).toContain('idx_commits_repo');
+    expect(idxNames).toContain('idx_commits_author_ts');
+    db.close();
+  });
 });
 
 describe('Config — stale_branch_days', () => {

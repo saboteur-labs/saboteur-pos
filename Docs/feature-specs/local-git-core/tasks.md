@@ -18,6 +18,7 @@
 **Depends on:** none
 **Estimate:** 1
 **Notes:** Spec FR #5 requires persistent commit→task links; a new table is the lightest fit.
+**Done:** [x]
 
 ### Task 3: Repo discovery module
 
