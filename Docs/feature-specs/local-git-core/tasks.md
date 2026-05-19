@@ -68,6 +68,7 @@
 **Depends on:** 3, 4, 5, 6
 **Estimate:** 3
 **Notes:** Satisfies spec FR #5 (linking) and FR #11 (local-only). This is the integration hub for the git primitives.
+**Done:** [x]
 
 ### Task 8: Auto-update `tasks.repo` and `tasks.branch`
 

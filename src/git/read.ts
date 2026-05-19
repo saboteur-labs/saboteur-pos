@@ -46,11 +46,7 @@ export function isDirty(repoPath: string): boolean {
   return out.trim().length > 0;
 }
 
-export function getRecentCommits(repoPath: string, n: number): Commit[] {
-  const format = `%H${FIELD}%aI${FIELD}%B${RECORD}`;
-  const out = gitRunSafe(repoPath, ['log', `-n`, String(n), `--format=${format}`]);
-  if (out === null || out.length === 0) return [];
-
+function parseCommitLog(out: string): Commit[] {
   const records = out.split(RECORD).filter((r) => r.length > 0);
   const commits: Commit[] = [];
   for (const record of records) {
@@ -65,4 +61,38 @@ export function getRecentCommits(repoPath: string, n: number): Commit[] {
     commits.push({ sha, message, author_ts });
   }
   return commits;
+}
+
+export function getRecentCommits(repoPath: string, n: number): Commit[] {
+  const format = `%H${FIELD}%aI${FIELD}%B${RECORD}`;
+  const out = gitRunSafe(repoPath, ['log', `-n`, String(n), `--format=${format}`]);
+  if (out === null || out.length === 0) return [];
+  return parseCommitLog(out);
+}
+
+export function getCommitsSince(
+  repoPath: string,
+  sinceIso: string,
+  ref?: string,
+): Commit[] {
+  const format = `%H${FIELD}%aI${FIELD}%B${RECORD}`;
+  const args = ['log', `--since=${sinceIso}`, `--format=${format}`];
+  if (ref) args.push(ref);
+  else args.push('--all');
+  const out = gitRunSafe(repoPath, args);
+  if (out === null || out.length === 0) return [];
+  return parseCommitLog(out);
+}
+
+export function listBranches(repoPath: string): string[] {
+  const out = gitRunSafe(repoPath, [
+    'for-each-ref',
+    '--format=%(refname:short)',
+    'refs/heads/',
+  ]);
+  if (out === null) return [];
+  return out
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
