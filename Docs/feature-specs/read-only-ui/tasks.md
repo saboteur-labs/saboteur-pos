@@ -107,7 +107,7 @@
 **Depends on:** 3, 4
 **Estimate:** 5
 **Notes:** No live data here — props only. Built before views so views just compose.
-**Done:** []
+**Done:** [x]
 
 ### Task 12: App shell with state-driven view switching
 
