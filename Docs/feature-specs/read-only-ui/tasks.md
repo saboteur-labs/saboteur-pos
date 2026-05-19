@@ -87,7 +87,7 @@
 **Depends on:** 7, 8
 **Estimate:** 2
 **Notes:** Satisfies spec reqs #5, #6. Use the `ws` package.
-**Done:** []
+**Done:** [x]
 
 ### Task 10: Zustand store + WebSocket client
 
