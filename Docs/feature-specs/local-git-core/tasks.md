@@ -58,6 +58,7 @@
 **Depends on:** 2
 **Estimate:** 2
 **Notes:** Satisfies the persistence half of spec FR #5.
+**Done:** [x]
 
 ### Task 7: Commit indexing job
 
