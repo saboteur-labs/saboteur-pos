@@ -164,7 +164,7 @@
 **Depends on:** 16
 **Estimate:** 1
 **Notes:** Satisfies spec req #10. Network blocking can be done with `nock.disableNetConnect()` or by intercepting `undici`.
-**Done:** []
+**Done:** [x]
 
 ## Summary
 
