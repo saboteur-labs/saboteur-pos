@@ -125,6 +125,37 @@ describe('indexCommits', () => {
     ]);
   });
 
+  it('auto-updates tasks.repo and tasks.branch to the newest linked commit', () => {
+    seedTask(db, 'task_a1b2c3d4');
+    const repo = join(root, 'demo');
+    mkdirSync(repo);
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'a.txt', '1', 'first [task_a1b2c3d4]');
+    git(repo, 'checkout -q -b feat/x');
+    makeCommit(repo, 'b.txt', '2', 'newer [task_a1b2c3d4]');
+
+    const result = indexCommits(db, configFor(root));
+    expect(result.tasksUpdated).toBe(1);
+
+    const row = db
+      .prepare(`SELECT repo, branch FROM tasks WHERE id = ?`)
+      .get('task_a1b2c3d4') as { repo: string; branch: string };
+    expect(row.repo).toBe('demo');
+    expect(row.branch).toBe('feat/x');
+  });
+
+  it('does not re-update tasks whose repo/branch already match', () => {
+    seedTask(db, 'task_a1b2c3d4');
+    const repo = join(root, 'demo');
+    mkdirSync(repo);
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'a.txt', '1', 'work [task_a1b2c3d4]');
+
+    indexCommits(db, configFor(root));
+    const second = indexCommits(db, configFor(root));
+    expect(second.tasksUpdated).toBe(0);
+  });
+
   it('respects the horizon window', () => {
     seedTask(db, 'task_a1b2c3d4');
     const repo = join(root, 'demo');

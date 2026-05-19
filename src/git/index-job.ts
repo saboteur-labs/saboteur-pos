@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Config } from '../config.js';
-import { upsertCommits, type CommitInput } from '../db/commits.js';
+import { upsertCommit, type CommitInput } from '../db/commits.js';
 import { resolvePath } from '../config.js';
 import { discoverRepos } from './discover.js';
 import { extractTaskIds } from './parse.js';
@@ -13,9 +13,16 @@ export interface IndexCommitsOptions {
 export interface IndexCommitsResult {
   reposScanned: number;
   commitsIndexed: number;
+  tasksUpdated: number;
 }
 
 const DEFAULT_HORIZON_DAYS = 60;
+
+interface TaskBranchUpdate {
+  repo: string;
+  branch: string | null;
+  author_ts: string;
+}
 
 export function indexCommits(
   db: Database.Database,
@@ -33,6 +40,7 @@ export function indexCommits(
   const since = new Date(Date.now() - horizonDays * 24 * 60 * 60 * 1000).toISOString();
   const toUpsert: CommitInput[] = [];
   const seenShas = new Set<string>();
+  const latestPerTask = new Map<string, TaskBranchUpdate>();
 
   for (const repo of repos) {
     const branches = listBranches(repo.path);
@@ -47,24 +55,43 @@ export function indexCommits(
         if (!knownId) continue;
 
         seenShas.add(c.sha);
+        const branch = ref ?? null;
         toUpsert.push({
           sha: c.sha,
           repo: repo.name,
-          branch: ref ?? null,
+          branch,
           task_id: knownId,
           message: c.message,
           author_ts: c.author_ts,
         });
+
+        const prev = latestPerTask.get(knownId);
+        if (!prev || c.author_ts > prev.author_ts) {
+          latestPerTask.set(knownId, { repo: repo.name, branch, author_ts: c.author_ts });
+        }
       }
     }
   }
 
-  if (toUpsert.length > 0) {
-    upsertCommits(db, toUpsert);
+  let tasksUpdated = 0;
+  if (toUpsert.length > 0 || latestPerTask.size > 0) {
+    const apply = db.transaction(() => {
+      for (const c of toUpsert) upsertCommit(db, c);
+      const update = db.prepare(
+        `UPDATE tasks SET repo = ?, branch = ? WHERE id = ?
+           AND (repo IS NOT ? OR branch IS NOT ?)`,
+      );
+      for (const [task_id, info] of latestPerTask) {
+        const r = update.run(info.repo, info.branch, task_id, info.repo, info.branch);
+        if (r.changes > 0) tasksUpdated += 1;
+      }
+    });
+    apply();
   }
 
   return {
     reposScanned: repos.length,
     commitsIndexed: toUpsert.length,
+    tasksUpdated,
   };
 }

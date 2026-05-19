@@ -78,6 +78,7 @@
 **Depends on:** 7
 **Estimate:** 2
 **Notes:** Satisfies spec FR #13 — wires the existing Phase 1 stubs.
+**Done:** [x]
 
 ### Task 9: Repo state section in `sab briefing`
 
