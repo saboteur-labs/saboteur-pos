@@ -1,6 +1,7 @@
 import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getTask } from '../../db/tasks.js';
+import { listCommitsForTask } from '../../db/commits.js';
 import { daysSince, formatDate } from '../../utils.js';
 import { c, stateColor, priorityBadge, energyBadge } from '../../colors.js';
 
@@ -41,6 +42,8 @@ export function runTaskView(id: string, options: { config?: string }): void {
   const blocksLine = resolveTaskTitles(task.blocks);
   const blockedByLine = resolveTaskTitles(task.blocked_by);
 
+  const linkedCommits = listCommitsForTask(db, task.id);
+
   db.close();
 
   const days = daysSince(task.updated_at);
@@ -65,5 +68,15 @@ export function runTaskView(id: string, options: { config?: string }): void {
     const ts = formatDate(entry.timestamp) + ' ' + entry.timestamp.slice(11, 16);
     const reason = entry.reason ? `  (${entry.reason})` : '';
     process.stdout.write(`  ${stateColor(entry.state, entry.state.padEnd(10))} → ${c.muted(ts)}${reason}\n`);
+  }
+
+  if (linkedCommits.length > 0) {
+    process.stdout.write(`\n${c.label('Recent commits:')}\n`);
+    for (const cm of linkedCommits) {
+      const short = cm.sha.slice(0, 7);
+      const firstLine = cm.message.split('\n')[0];
+      const date = cm.author_ts.slice(0, 10);
+      process.stdout.write(`  ${c.muted(short)}  ${firstLine}  ${c.muted(date)}\n`);
+    }
   }
 }

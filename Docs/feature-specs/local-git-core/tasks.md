@@ -118,6 +118,7 @@
 **Depends on:** 6
 **Estimate:** 1
 **Notes:** Satisfies the `sab task view` exposure part of spec FR #5.
+**Done:** [x]
 
 ### Task 13: Scan budget + degradation
 
