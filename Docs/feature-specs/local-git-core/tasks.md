@@ -28,6 +28,7 @@
 **Depends on:** none
 **Estimate:** 2
 **Notes:** Satisfies spec FR #1.
+**Done:** [x]
 
 ### Task 4: Git read primitives
 
