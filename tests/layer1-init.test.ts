@@ -40,3 +40,34 @@ describe('Layer 1 — Init + Status', () => {
     expect(config.repos_dir).toBeDefined(); // Phase 2a stub present
   });
 });
+
+describe('Config — stale_branch_days', () => {
+  it('makeDefaultConfig writes stale_branch_days: 14', async () => {
+    const { makeDefaultConfig } = await import('../src/config.js');
+    const config = makeDefaultConfig('/tmp/notes', '/tmp/db', '/tmp/secrets');
+    expect(config.briefing.stale_branch_days).toBe(14);
+  });
+
+  it('loadConfig backfills missing stale_branch_days to 14', async () => {
+    const { loadConfig } = await import('../src/config.js');
+    const { writeFileSync, mkdtempSync } = await import('fs');
+    const { tmpdir } = await import('os');
+    const { join } = await import('path');
+    const dir = mkdtempSync(join(tmpdir(), 'sab-cfg-'));
+    const configPath = join(dir, 'saboteur.config.json');
+    writeFileSync(
+      configPath,
+      JSON.stringify({
+        version: '1',
+        db_path: '/tmp/db',
+        secrets_path: '/tmp/secrets',
+        repos_dir: '/tmp/repos',
+        active_context: 'inbox',
+        briefing: { stale_task_days: 3, provider_timeout_ms: 2000 }, // no stale_branch_days
+        sources: [],
+      }),
+    );
+    const loaded = loadConfig(configPath);
+    expect(loaded.briefing.stale_branch_days).toBe(14);
+  });
+});

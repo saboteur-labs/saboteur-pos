@@ -8,6 +8,7 @@
 **Depends on:** none
 **Estimate:** 1
 **Notes:** Satisfies spec FR #9. Mirrors the existing `stale_task_days` pattern.
+**Done:** [x]
 
 ### Task 2: Add `commits` table to schema
 
