@@ -37,7 +37,7 @@
 **Depends on:** 3
 **Estimate:** 2
 **Notes:** Satisfies spec req #7. Confirm Storybook deps are devDependencies only.
-**Done:** []
+**Done:** [5]
 
 ### Task 5: Add `sab ui` command with lifecycle and port check
 
@@ -47,7 +47,7 @@
 **Depends on:** 1
 **Estimate:** 3
 **Notes:** Satisfies spec reqs #1, #2. Use `net.createServer().listen()` probe for the port check; spawn via `child_process.spawn` with `detached: true, stdio: 'ignore'` then `unref()`.
-**Done:** []
+**Done:** [x]
 
 ### Task 6: Read-only data access layer for UI server
 
@@ -57,7 +57,7 @@
 **Depends on:** 1
 **Estimate:** 3
 **Notes:** Satisfies spec req #4. Import from `src/` where possible to avoid drift; expose only read paths.
-**Done:** []
+**Done:** [x]
 
 ### Task 7: JSON API endpoints
 
@@ -67,7 +67,7 @@
 **Depends on:** 6
 **Estimate:** 3
 **Notes:** Satisfies spec reqs #3 (view filters), #6 (no mutations).
-**Done:** []
+**Done:** [x]
 
 ### Task 8: File watcher for DB + notes directory
 
@@ -77,7 +77,7 @@
 **Depends on:** 6
 **Estimate:** 2
 **Notes:** Use `chokidar` or `fs.watch`. Debounce protects against SQLite WAL churn.
-**Done:** []
+**Done:** [x]
 
 ### Task 9: WebSocket channel pushing change events
 
