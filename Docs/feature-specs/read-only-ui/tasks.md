@@ -126,7 +126,7 @@
 **Done when:** Briefing view matches the CLI `sab briefing` output for the same fixture data, with empty sections omitted.
 **Depends on:** 12
 **Estimate:** 2
-**Done:** []
+**Done:** [x]
 
 ### Task 14: Tasks view with view filters
 
