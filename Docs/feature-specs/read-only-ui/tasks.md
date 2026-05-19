@@ -154,7 +154,7 @@
 **Depends on:** 5, 7, 9, 13, 14, 15
 **Estimate:** 2
 **Notes:** Satisfies spec reqs #1, #10.
-**Done:** []
+**Done:** [x]
 
 ### Task 17: Verify no outbound network requests
 

@@ -27,17 +27,12 @@ export async function runUi(): Promise<void> {
   }
 
   const __dirname = dirname(fileURLToPath(import.meta.url));
-  const uiDir = join(__dirname, '..', '..', 'ui');
+  const serverScript = join(__dirname, '..', 'server.js');
 
-  const child = spawn(
-    'npm',
-    ['run', 'dev', '--', '--port', String(PORT), '--host', HOST],
-    {
-      cwd: uiDir,
-      detached: true,
-      stdio: 'ignore',
-    },
-  );
+  const child = spawn(process.execPath, [serverScript], {
+    detached: true,
+    stdio: 'ignore',
+  });
   child.unref();
 
   process.stdout.write(`http://${HOST}:${PORT}\n`);

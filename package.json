@@ -11,7 +11,7 @@
   },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "build": "tsc && chmod +x bin/sab.js",
+    "build": "tsc && npm --prefix ui run build && node_modules/.bin/esbuild ui/server/start.ts --bundle --packages=external --platform=node --format=esm --outfile=dist/server.js && chmod +x bin/sab.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },
