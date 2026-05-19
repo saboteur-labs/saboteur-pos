@@ -117,7 +117,7 @@
 **Depends on:** 10, 11
 **Estimate:** 2
 **Notes:** Satisfies spec req #3 (single page, state-driven).
-**Done:** []
+**Done:** [x]
 
 ### Task 13: Briefing view
 
