@@ -20,6 +20,7 @@ import { runNoteEdit } from './commands/note/edit.js';
 import { runNoteFind } from './commands/note/find.js';
 import { runSync } from './commands/sync.js';
 import { runBriefing } from './commands/briefing.js';
+import { runGitList } from './commands/git/list.js';
 import { runUi, runUiStop } from './commands/ui.js';
 
 const program = new Command();
@@ -37,7 +38,9 @@ Commands:
   sab init                     Initialize workspace
   sab status                   System state (read-only)
   sab briefing [--context]     Daily briefing (read-only)
+  sab briefing --weekly        7-day shipped/stalled/repo-activity report
   sab sync                     Rebuild knowledge index from disk
+  sab git list                 List valid repos under repos_dir with their branches
 
   sab task add <title>         Create task (default state: backlog)
   sab task list [--view <v>]   List tasks  views: today|active|backlog|blocked|review|deep-work|stale
@@ -263,6 +266,16 @@ program
   .option('--weekly', 'Run the weekly briefing instead of the daily one')
   .option('--config <path>', 'Path to config file')
   .action((options) => runBriefing(options));
+
+// ── sab git ──────────────────────────────────────────────────────────────────
+const gitCmd = program.command('git').description('Inspect git state visible to Saboteur');
+
+gitCmd
+  .command('list')
+  .description('List valid repos under repos_dir with their current branches')
+  .option('--context <slug>', 'Mark repos scoped to a different context')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runGitList(options));
 
 // ── sab sync ─────────────────────────────────────────────────────────────────
 program
