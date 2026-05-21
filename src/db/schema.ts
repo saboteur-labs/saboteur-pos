@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS knowledge_index (
   updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS commits (
+  sha       TEXT PRIMARY KEY,
+  repo      TEXT NOT NULL,
+  branch    TEXT,
+  task_id   TEXT REFERENCES tasks(id),
+  message   TEXT NOT NULL,
+  author_ts TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_tasks_context ON tasks(context_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_state   ON tasks(state);
 CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at);
@@ -56,4 +65,8 @@ CREATE INDEX IF NOT EXISTS idx_ki_type    ON knowledge_index(type);
 CREATE INDEX IF NOT EXISTS idx_ki_context ON knowledge_index(context_id);
 CREATE INDEX IF NOT EXISTS idx_ki_task    ON knowledge_index(task_id);
 CREATE INDEX IF NOT EXISTS idx_ki_updated ON knowledge_index(updated_at);
+
+CREATE INDEX IF NOT EXISTS idx_commits_task      ON commits(task_id);
+CREATE INDEX IF NOT EXISTS idx_commits_repo      ON commits(repo);
+CREATE INDEX IF NOT EXISTS idx_commits_author_ts ON commits(author_ts);
 `;

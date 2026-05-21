@@ -4,6 +4,7 @@ import { dirname, join } from 'path';
 
 export interface BriefingConfig {
   stale_task_days: number;
+  stale_branch_days: number;
   provider_timeout_ms: number; // Phase 2c stub — not used in Phase 1
 }
 
@@ -44,7 +45,11 @@ export function loadConfig(configPath?: string): Config {
   }
   try {
     const raw = readFileSync(path, 'utf-8');
-    return JSON.parse(raw) as Config;
+    const parsed = JSON.parse(raw) as Config;
+    if (parsed.briefing && parsed.briefing.stale_branch_days === undefined) {
+      parsed.briefing.stale_branch_days = 14;
+    }
+    return parsed;
   } catch {
     process.stderr.write(
       `Config at ${path} is malformed. Run 'sab init' to reinitialize.\n`,
@@ -68,6 +73,7 @@ export function makeDefaultConfig(notesPath: string, dbPath: string, secretsPath
     active_context: 'inbox',
     briefing: {
       stale_task_days: 3,
+      stale_branch_days: 14,
       provider_timeout_ms: 2000,
     },
     sources: [

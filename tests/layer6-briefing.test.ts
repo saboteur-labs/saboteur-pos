@@ -1,7 +1,18 @@
-import { readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { execSync } from 'child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
+
+const GIT_ENV = '-c user.email=test@test -c user.name=Test';
+function git(cwd: string, args: string): string {
+  return execSync(`git ${GIT_ENV} ${args}`, { cwd, encoding: 'utf-8' });
+}
+function makeCommit(cwd: string, file: string, content: string, message: string): void {
+  writeFileSync(join(cwd, file), content);
+  git(cwd, `add ${file}`);
+  git(cwd, `commit -q -m "${message.replace(/"/g, '\\"')}"`);
+}
 
 function extractId(stdout: string): string {
   const match = stdout.match(/(task_[a-f0-9]+)/);
@@ -131,6 +142,200 @@ describe('Layer 6 — Daily Briefing', () => {
     const result = sabConfig('briefing --context work', env);
     expect(result.stdout).toContain('Active Context: work');
     expect(result.stdout).toContain('Work task');
+  });
+
+  it('Section 8 (repo state) shows branch, dirty flag, and linked commits', () => {
+    const id = extractId(sabConfig('task add "Login bug"', env).stdout);
+    sabConfig(`task move ${id} active`, env);
+    const reposRoot = dirname(env.configPath); // createTestEnv sets repos_dir = root
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', `fix login [${id}]`);
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('── Repo State');
+    expect(result.stdout).toContain('demo');
+    expect(result.stdout).toContain('main');
+    expect(result.stdout).toContain('clean');
+    expect(result.stdout).toContain('fix login');
+    expect(result.stdout).toContain('Login bug');
+  });
+
+  it('Section 8 surfaces detached HEAD as detached @ <sha>', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'first');
+    const sha = git(repoPath, 'rev-parse HEAD').trim();
+    git(repoPath, `checkout -q ${sha}`);
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('detached @');
+    expect(result.stdout).toContain(sha.slice(0, 7));
+  });
+
+  it('Section 8 marks repos with uncommitted changes as dirty', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'first');
+    writeFileSync(join(repoPath, 'b.txt'), 'untracked');
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('dirty');
+  });
+
+  it('Section 8 is omitted when repos_dir has no working repos', () => {
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).not.toContain('── Repo State');
+  });
+
+  it('Stale Branches subsection lists branches older than stale_branch_days', () => {
+    // Lower the threshold so we can age branches realistically with --date
+    const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+    config.briefing.stale_branch_days = 14;
+    writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'fresh on main');
+    git(repoPath, 'checkout -q -b old-feature');
+
+    const oldDate = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+    writeFileSync(join(repoPath, 'b.txt'), 'stale');
+    git(repoPath, 'add b.txt');
+    execSync(
+      `GIT_AUTHOR_DATE="${oldDate}" GIT_COMMITTER_DATE="${oldDate}" git ${GIT_ENV} commit -q -m "stale branch commit"`,
+      { cwd: repoPath },
+    );
+    git(repoPath, 'checkout -q main');
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('Stale Branches');
+    expect(result.stdout).toContain('demo/old-feature');
+    expect(result.stdout).toMatch(/20d|21d/);
+  });
+
+  it('Bare and broken repos are surfaced in a skipped footer', () => {
+    const reposRoot = dirname(env.configPath);
+    const working = join(reposRoot, 'working');
+    mkdirSync(working);
+    git(working, 'init -q -b main');
+    makeCommit(working, 'a.txt', '1', 'first');
+
+    const bare = join(reposRoot, 'bare.git');
+    mkdirSync(bare);
+    git(bare, 'init -q --bare');
+
+    const broken = join(reposRoot, 'broken');
+    mkdirSync(broken);
+    writeFileSync(join(broken, '.git'), 'gitdir: /nowhere');
+
+    const result = sabConfig('briefing', env);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('working');
+    expect(result.stdout).toContain('Skipped 2 repos');
+    expect(result.stdout).toContain('bare.git (bare)');
+    expect(result.stdout).toContain('broken (read-error)');
+  });
+
+  it('Stale Branches subsection is omitted when no branches are stale', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'fresh');
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain('── Repo State');
+    expect(result.stdout).not.toContain('Stale Branches');
+  });
+
+  it('--weekly aggregates shipped, stalled, and repo activity over the last 7 days', async () => {
+    const Database = (await import('better-sqlite3')).default;
+
+    const shippedIds: string[] = [];
+    for (let i = 0; i < 3; i += 1) {
+      const id = extractId(sabConfig(`task add "Shipped ${i}"`, env).stdout);
+      sabConfig(`task move ${id} active`, env);
+      sabConfig(`task move ${id} review`, env);
+      sabConfig(`task move ${id} done`, env);
+      shippedIds.push(id);
+    }
+
+    const stalledIds: string[] = [];
+    for (let i = 0; i < 2; i += 1) {
+      const id = extractId(sabConfig(`task add "Stalled ${i}"`, env).stdout);
+      sabConfig(`task move ${id} active`, env);
+      stalledIds.push(id);
+    }
+    // Backdate the latest state_history entry on stalled tasks beyond the 7-day window
+    {
+      const db = new Database(env.dbPath);
+      const oldIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      for (const id of stalledIds) {
+        const row = db.prepare(`SELECT state_history FROM tasks WHERE id = ?`).get(id) as {
+          state_history: string;
+        };
+        const hist = JSON.parse(row.state_history);
+        for (const e of hist) e.timestamp = oldIso;
+        db.prepare(`UPDATE tasks SET state_history = ?, updated_at = ? WHERE id = ?`).run(
+          JSON.stringify(hist),
+          oldIso,
+          id,
+        );
+      }
+      db.close();
+    }
+
+    const reposRoot = dirname(env.configPath);
+    const repoSpecs: Array<{ name: string; count: number }> = [
+      { name: 'alpha', count: 3 },
+      { name: 'beta', count: 1 },
+      { name: 'gamma', count: 2 },
+      { name: 'delta', count: 0 },
+    ];
+    for (const spec of repoSpecs) {
+      const path = join(reposRoot, spec.name);
+      mkdirSync(path);
+      git(path, 'init -q -b main');
+      // delta repo has no commits → omitted from activity table
+      for (let i = 0; i < spec.count; i += 1) {
+        makeCommit(path, `f${i}.txt`, String(i), `${spec.name} [${shippedIds[0]}] commit ${i}`);
+      }
+    }
+
+    const result = sabConfig('briefing --weekly', env);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('Weekly Briefing');
+    expect(result.stdout).toContain('Shipped');
+    for (let i = 0; i < 3; i += 1) {
+      expect(result.stdout).toContain(`Shipped ${i}`);
+    }
+    expect(result.stdout).toContain('Stalled');
+    expect(result.stdout).toContain('Stalled 0');
+    expect(result.stdout).toContain('Stalled 1');
+    expect(result.stdout).toContain('Repo Activity');
+    expect(result.stdout).toContain('alpha');
+    expect(result.stdout).toContain('beta');
+    expect(result.stdout).toContain('gamma');
+    expect(result.stdout).not.toContain('delta'); // no commits → omitted from activity
+    // alpha (3 commits) must rank before beta (1 commit) in the table
+    expect(result.stdout.indexOf('alpha')).toBeLessThan(result.stdout.indexOf('beta'));
+  });
+
+  it('--weekly does not render the daily-briefing sections', () => {
+    const id = extractId(sabConfig('task add "Some task"', env).stdout);
+    sabConfig(`task move ${id} active`, env);
+    const result = sabConfig('briefing --weekly', env);
+    expect(result.stdout).not.toContain('── Active Tasks');
+    expect(result.stdout).not.toContain('── Inbox');
+    expect(result.stdout).toContain('Weekly Briefing');
   });
 
   it('briefing is read-only — does not modify data', () => {

@@ -120,6 +120,38 @@ CREATE INDEX idx_ki_updated ON knowledge_index(updated_at);
 
 ---
 
+### `commits`
+
+> Phase 2a. Persists the commit → task link discovered by scanning repos under `repos_dir`. Source of truth is git itself; this table is a derived index, rebuilt by `indexCommits`.
+
+```sql
+CREATE TABLE commits (
+  sha       TEXT PRIMARY KEY,   -- full commit sha
+  repo      TEXT NOT NULL,      -- repo name (basename of the repo directory under repos_dir)
+  branch    TEXT,               -- branch the commit was observed on; nullable for detached/orphan
+  task_id   TEXT                -- FK → tasks.id; the task extracted from the message
+            REFERENCES tasks(id),
+  message   TEXT NOT NULL,      -- full commit message
+  author_ts TEXT NOT NULL       -- ISO8601 author timestamp
+);
+```
+
+**Indexes:**
+
+```sql
+CREATE INDEX idx_commits_task      ON commits(task_id);
+CREATE INDEX idx_commits_repo      ON commits(repo);
+CREATE INDEX idx_commits_author_ts ON commits(author_ts);
+```
+
+**Rules:**
+
+- A commit is indexed only if its message contains a bracketed task ID matching `[task_xxxxxxxx]` and that task exists in `tasks`.
+- Re-running `indexCommits` is idempotent — same sha replaces (upsert).
+- `repo` is the basename relative to `repos_dir`, not an absolute path, so the index survives moving `repos_dir`.
+
+---
+
 ### `sources`
 
 ```sql

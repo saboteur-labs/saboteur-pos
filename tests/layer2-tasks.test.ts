@@ -1,5 +1,18 @@
+import { execSync } from 'child_process';
+import { mkdirSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
+
+const GIT = '-c user.email=test@test -c user.name=Test';
+function git(cwd: string, args: string): string {
+  return execSync(`git ${GIT} ${args}`, { cwd, encoding: 'utf-8' });
+}
+function makeCommit(cwd: string, file: string, content: string, message: string): void {
+  writeFileSync(join(cwd, file), content);
+  git(cwd, `add ${file}`);
+  git(cwd, `commit -q -m "${message.replace(/"/g, '\\"')}"`);
+}
 
 function extractId(stdout: string): string {
   const match = stdout.match(/(task_[a-f0-9]+)/);
@@ -165,6 +178,39 @@ describe('Layer 2 — Tasks + State Machine', () => {
       const del = sabConfig('task delete task_nonexistent', env);
       expect(del.code).toBe(1);
       expect(del.stderr).toContain("not found");
+    });
+  });
+
+  describe('sab task view — linked commits', () => {
+    it('shows recent commits newest-first when the task has linked commits', () => {
+      const id = extractId(sabConfig('task add "Login bug"', env).stdout);
+      const reposRoot = dirname(env.configPath);
+      const repoPath = join(reposRoot, 'demo');
+      mkdirSync(repoPath);
+      git(repoPath, 'init -q -b main');
+      makeCommit(repoPath, 'a.txt', '1', `first [${id}]`);
+      makeCommit(repoPath, 'b.txt', '2', `second [${id}]`);
+      makeCommit(repoPath, 'c.txt', '3', `third [${id}]`);
+
+      // Briefing triggers indexCommits and populates the commits table
+      sabConfig('briefing', env);
+
+      const view = sabConfig(`task view ${id}`, env);
+      expect(view.code).toBe(0);
+      expect(view.stdout).toContain('Recent commits:');
+      const firstPos = view.stdout.indexOf('first');
+      const secondPos = view.stdout.indexOf('second');
+      const thirdPos = view.stdout.indexOf('third');
+      // newest first → third appears before second appears before first
+      expect(thirdPos).toBeGreaterThan(0);
+      expect(thirdPos).toBeLessThan(secondPos);
+      expect(secondPos).toBeLessThan(firstPos);
+    });
+
+    it('omits the Recent commits section when the task has no linked commits', () => {
+      const id = extractId(sabConfig('task add "Unlinked"', env).stdout);
+      const view = sabConfig(`task view ${id}`, env);
+      expect(view.stdout).not.toContain('Recent commits:');
     });
   });
 });
