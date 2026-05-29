@@ -6,3 +6,4 @@ saboteur.secrets.json
 *.db-shm
 *.db-wal
 .DS_Store
+.claude/settings.local.json

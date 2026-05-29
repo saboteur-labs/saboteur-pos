@@ -60,9 +60,13 @@ Commands:
   sab context delete <slug>    Delete context (--reassign | --force)
 
   sab note new <title>         Create note (opens \$EDITOR)
+  sab note new <title> --body <text>   Create note with body directly (no editor)
+  sab note new <title> --body @<path>  Create note with body from file (no editor)
   sab note list [--view recent] List notes
   sab note view <id>           Print note with resolved wiki-links
   sab note edit <id>           Edit note file in \$EDITOR
+  sab note edit <id> --body <text>    Replace note body directly (no editor)
+  sab note edit <id> --body @<path>   Replace note body from file (no editor)
   sab note find --tag <tag>    Filter notes by tag
   sab note find --task <id>    Filter notes linked to a task
 
@@ -220,10 +224,11 @@ Notes:
 
 note
   .command('new <title>')
-  .description('Create a new note and open in $EDITOR')
+  .description('Create a new note in $EDITOR, or supply body directly with --body <text|@path>')
   .option('--context <slug>', 'Set context in frontmatter')
   .option('--task <id>', 'Pre-populate task_id in frontmatter')
   .option('--tag <tag>', 'Add a tag (repeatable)', (val, prev: string[]) => [...prev, val], [] as string[])
+  .option('--body <text>', 'Set note body directly without opening editor; prefix with @ to read from a file path')
   .option('--config <path>', 'Path to config file')
   .action((title, options) => runNoteNew(title, options));
 
@@ -244,7 +249,8 @@ note
 
 note
   .command('edit <id>')
-  .description('Open note in $EDITOR and re-index after close')
+  .description('Edit note in $EDITOR, or replace body directly with --body <text|@path>')
+  .option('--body <text>', 'Replace note body directly without opening editor; prefix with @ to read from a file path')
   .option('--config <path>', 'Path to config file')
   .action((id, options) => runNoteEdit(id, options));
 

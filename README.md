@@ -95,6 +95,12 @@ Notes are Markdown files with YAML frontmatter. The `.md` file is the source of 
 
 ```bash
 sab note new "Auth Flow Thoughts" --tag auth --task <id>
+sab note new "Auth Flow Thoughts" --body "Initial thoughts here."   # no editor
+sab note new "Auth Flow Thoughts" --body @notes-draft.md            # body from file
+sab note view <id>             # print note with resolved wiki-links
+sab note edit <id>             # open in $EDITOR
+sab note edit <id> --body "Updated body."                           # no editor
+sab note edit <id> --body @revised.md                              # body from file
 sab note find --tag auth
 sab sync                       # full rebuild of the knowledge index
 ```
