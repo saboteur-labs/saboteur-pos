@@ -8,19 +8,23 @@ import { upsertKnowledgeEntry } from '../../db/knowledge.js';
 import { generateId } from '../../ids.js';
 import { slugify } from '../../utils.js';
 import { c } from '../../colors.js';
+import { resolveBodyContent } from './edit.js';
 
 interface NoteNewOptions {
   context?: string;
   task?: string;
   tag?: string[];
   config?: string;
+  body?: string;
 }
 
 export function runNoteNew(title: string, options: NoteNewOptions): void {
-  const editor = process.env.EDITOR;
-  if (!editor) {
-    process.stderr.write(c.red('No $EDITOR set. Export EDITOR=<your editor> and try again.\n'));
-    process.exit(1);
+  if (options.body === undefined) {
+    const editor = process.env.EDITOR;
+    if (!editor) {
+      process.stderr.write(c.red('No $EDITOR set. Export EDITOR=<your editor> and try again.\n'));
+      process.exit(1);
+    }
   }
 
   const configPath = resolvePath(options.config ?? DEFAULT_CONFIG_PATH);
@@ -29,7 +33,6 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
 
   const contextId = options.context ?? config.active_context;
 
-  // Validate context
   const ctx = db.prepare(`SELECT id FROM contexts WHERE id = ?`).get(contextId);
   if (!ctx) {
     process.stderr.write(c.red(`Context '${contextId}' does not exist.\n`));
@@ -37,7 +40,6 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
     process.exit(1);
   }
 
-  // Validate task if provided
   if (options.task) {
     const t = db.prepare(`SELECT id FROM tasks WHERE id = ?`).get(options.task);
     if (!t) {
@@ -65,8 +67,36 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
     updated_at: now,
   };
 
-  const fileContent = matter.stringify('\n', frontmatter);
-  writeFileSync(filePath, fileContent, 'utf-8');
+  if (options.body !== undefined) {
+    const resolved = resolveBodyContent(options.body);
+    if (!resolved.ok) {
+      process.stderr.write(c.red(`${resolved.error}\n`));
+      db.close();
+      process.exit(1);
+    }
+    writeFileSync(filePath, matter.stringify(resolved.content, frontmatter), 'utf-8');
+    db.transaction(() => {
+      upsertKnowledgeEntry(db, {
+        id,
+        source_id: 'personal-notes',
+        type: 'note',
+        title,
+        tags: options.tag ?? [],
+        task_id: options.task ?? null,
+        context_id: contextId,
+        path: filePath,
+        created_at: now,
+        updated_at: now,
+      });
+    })();
+    db.close();
+    process.stdout.write(c.green(`Created ${id}: "${title}" → ${filePath}\n`));
+    return;
+  }
+
+  // Editor path (existing behaviour)
+  const editor = process.env.EDITOR!;
+  writeFileSync(filePath, matter.stringify('\n', frontmatter), 'utf-8');
 
   try {
     execSync(`${editor} ${filePath}`, { stdio: 'inherit' });
@@ -76,12 +106,9 @@ export function runNoteNew(title: string, options: NoteNewOptions): void {
     process.exit(1);
   }
 
-  // Re-read and index after editor closes
   const raw = readFileSync(filePath, 'utf-8');
   const parsed = matter(raw);
   const fm = parsed.data as Record<string, unknown>;
-
-  // Update updated_at on save
   const updatedAt = new Date().toISOString().slice(0, 10);
   const updatedFm: Record<string, unknown> = { ...fm, updated_at: updatedAt };
   writeFileSync(filePath, matter.stringify(parsed.content, updatedFm), 'utf-8');

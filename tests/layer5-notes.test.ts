@@ -128,4 +128,33 @@ describe('Layer 5 — Notes, Sync, Wiki-links, Dependencies', () => {
     expect(result.code).toBe(0);
     // No crash — may log a warning
   });
+
+  describe('sab note new --body', () => {
+    it('creates a note with the given body without opening editor', () => {
+      const result = sabConfig('note new "Direct Note" --body "This is the body."', env);
+      expect(result.code).toBe(0);
+      const id = extractNoteId(result.stdout);
+      const view = sabConfig(`note view ${id}`, env);
+      expect(view.stdout).toContain('This is the body.');
+    });
+
+    it('creates a note with body read from a file via @path', () => {
+      const bodyFile = join(env.notesPath, 'input-body.txt');
+      writeFileSync(bodyFile, 'Body from file.', 'utf-8');
+      const result = sabConfig(`note new "File Note" --body @${bodyFile}`, env);
+      expect(result.code).toBe(0);
+      const id = extractNoteId(result.stdout);
+      const view = sabConfig(`note view ${id}`, env);
+      expect(view.stdout).toContain('Body from file.');
+    });
+
+    it('exits non-zero and creates no note when body is whitespace-only', () => {
+      const before = sabConfig('note list', env);
+      const result = sabConfig('note new "Empty Body" --body "   "', env);
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('Body text is required');
+      const after = sabConfig('note list', env);
+      expect(after.stdout).toEqual(before.stdout);
+    });
+  });
 });
