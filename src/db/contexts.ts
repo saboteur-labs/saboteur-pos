@@ -63,6 +63,33 @@ export function createContext(db: Database.Database, opts: CreateContextOptions)
   return getContext(db, opts.slug)!;
 }
 
+function persistRepos(db: Database.Database, slug: string, repos: string[]): Context {
+  db.transaction(() => {
+    db.prepare(`UPDATE contexts SET repos = ? WHERE id = ?`).run(JSON.stringify(repos), slug);
+  })();
+  return getContext(db, slug)!;
+}
+
+export function addContextRepos(db: Database.Database, slug: string, repos: string[]): Context {
+  const ctx = getContext(db, slug);
+  if (!ctx) throw new Error(`Context '${slug}' does not exist.`);
+
+  const merged = [...ctx.repos];
+  for (const repo of repos) {
+    if (!merged.includes(repo)) merged.push(repo);
+  }
+  return persistRepos(db, slug, merged);
+}
+
+export function removeContextRepos(db: Database.Database, slug: string, repos: string[]): Context {
+  const ctx = getContext(db, slug);
+  if (!ctx) throw new Error(`Context '${slug}' does not exist.`);
+
+  const toRemove = new Set(repos);
+  const filtered = ctx.repos.filter((repo) => !toRemove.has(repo));
+  return persistRepos(db, slug, filtered);
+}
+
 export interface DeleteContextOptions {
   reassign?: string;
   force?: boolean;

@@ -13,6 +13,11 @@ import { runContextList } from './commands/context/list.js';
 import { runContextUse } from './commands/context/use.js';
 import { runContextShow } from './commands/context/show.js';
 import { runContextDelete } from './commands/context/delete.js';
+import {
+  runContextReposAdd,
+  runContextReposList,
+  runContextReposRemove,
+} from './commands/context/repos.js';
 import { runNoteNew } from './commands/note/new.js';
 import { runNoteList } from './commands/note/list.js';
 import { runNoteView } from './commands/note/view.js';
@@ -58,6 +63,7 @@ Commands:
   sab context use <slug>       Set active context
   sab context show             Print active context
   sab context delete <slug>    Delete context (--reassign | --force)
+  sab context repos <slug>     List repos linked to a context (add | remove)
 
   sab note new <title>         Create note (opens \$EDITOR)
   sab note new <title> --body <text>   Create note with body directly (no editor)
@@ -214,6 +220,26 @@ context
   .option('--force', 'Orphan all items to inbox')
   .option('--config <path>', 'Path to config file')
   .action((slug, options) => runContextDelete(slug, options));
+
+const repos = context.command('repos').description('Manage repos linked to a context');
+
+repos
+  .command('list <slug>', { isDefault: true })
+  .description('List repos linked to a context')
+  .option('--config <path>', 'Path to config file')
+  .action((slug, options) => runContextReposList(slug, options));
+
+repos
+  .command('add <slug> <repo...>')
+  .description('Link one or more repos to a context')
+  .option('--config <path>', 'Path to config file')
+  .action((slug, repoArgs, options) => runContextReposAdd(slug, repoArgs, options));
+
+repos
+  .command('remove <slug> <repo...>')
+  .description('Unlink one or more repos from a context')
+  .option('--config <path>', 'Path to config file')
+  .action((slug, repoArgs, options) => runContextReposRemove(slug, repoArgs, options));
 
 // ── sab note ─────────────────────────────────────────────────────────────────
 const note = program.command('note').description('Manage notes').addHelpText('after', `
