@@ -27,7 +27,7 @@
 **Depends on:** none
 **Estimate:** 3
 **Notes:** Add `'collision'` to `RepoKind`/`DiscoveredRepo` so the existing caller pattern (`kind !== 'working'` → skipped) routes collisions to the footer automatically. Leave `discoverRepos` (single-root) untouched. Collisions are detected among unioned `working` repos only; within a single root basenames are already unique. Keep the function pure — return `collisions`, let callers print the warning.
-**Done:** [ ]
+**Done:** [x] — `discoverAllRepos(roots)` + `collisionWarning(collisions)` in `src/git/discover.ts`; added `'collision'` to `RepoKind` and `CollisionInfo`/`DiscoverAllResult` types. Colliding working repos are re-marked `kind:'collision'` (excluded from the working set, surfaced for the skipped footer); collisions reported once with both dirs. Path-dedup guards against overlapping/duplicate roots. 6 unit tests in `src/git/discover.test.ts` (TDD red→green). `tsc` clean; git-list/briefing/index-job/discover suites 46/46 (no regression from the `RepoKind` widening — single-root callers never emit `'collision'` until wired in Tasks 3–5b).
 
 ---
 
