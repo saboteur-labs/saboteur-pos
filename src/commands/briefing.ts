@@ -1,11 +1,11 @@
-import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../config.js';
+import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../config.js';
 import { getDb } from '../db/index.js';
 import { listTasks, getTask } from '../db/tasks.js';
 import { getContext } from '../db/contexts.js';
 import { incrementalSync } from '../sync.js';
 import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
-import { discoverRepos } from '../git/discover.js';
+import { collisionWarning, discoverAllRepos, type CollisionInfo } from '../git/discover.js';
 import { indexCommits } from '../git/index-job.js';
 import {
   GitTimeoutError,
@@ -129,6 +129,11 @@ export function runBriefing(options: BriefingOptions): void {
 
   db.close();
 
+  // Repos with a basename that collides across roots are excluded; warn on stderr.
+  if (repoState.collisions.length > 0) {
+    process.stderr.write(collisionWarning(repoState.collisions) + '\n');
+  }
+
   // ── Rendering ─────────────────────────────────────────────────────────────
   const lines: string[] = [];
 
@@ -243,7 +248,7 @@ interface StaleBranch {
 
 interface SkippedRepo {
   name: string;
-  reason: 'bare' | 'read-error' | 'timeout';
+  reason: 'bare' | 'read-error' | 'timeout' | 'name-collision';
 }
 
 function collectRepoState(
@@ -257,12 +262,16 @@ function collectRepoState(
   staleBranches: StaleBranch[];
   skipped: SkippedRepo[];
   showLinkHint: boolean;
+  collisions: CollisionInfo[];
 } {
-  const reposDir = resolvePath(config.repos_dir);
-  const allDiscovered = discoverRepos(reposDir);
+  const { repos: allDiscovered, collisions } = discoverAllRepos(getReposDirs(config));
   const skipped: SkippedRepo[] = allDiscovered
     .filter((r) => r.kind !== 'working')
-    .map((r) => ({ name: r.name, reason: r.kind === 'bare' ? 'bare' : 'read-error' }));
+    .map((r) => ({
+      name: r.name,
+      reason:
+        r.kind === 'bare' ? 'bare' : r.kind === 'collision' ? 'name-collision' : 'read-error',
+    }));
   const timedOutSet = new Set(timedOutFromIndex);
   const discovered = allDiscovered.filter((r) => r.kind === 'working');
 
@@ -281,7 +290,7 @@ function collectRepoState(
     timedOutSet.size === 0 &&
     !showLinkHint
   ) {
-    return { repos: [], staleBranches: [], skipped: [], showLinkHint };
+    return { repos: [], staleBranches: [], skipped: [], showLinkHint, collisions };
   }
 
   const commitQuery = db.prepare(
@@ -337,7 +346,7 @@ function collectRepoState(
     }
   }
 
-  return { repos, staleBranches, skipped, showLinkHint };
+  return { repos, staleBranches, skipped, showLinkHint, collisions };
 }
 
 function renderRepoState(

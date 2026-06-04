@@ -226,6 +226,48 @@ describe('Layer 6 — Daily Briefing', () => {
     expect(result.stdout).not.toContain('no repos linked');
   });
 
+  it('discovers working repos across multiple repos_dirs', () => {
+    const reposRoot = dirname(env.configPath);
+    const a = join(reposRoot, 'roots-a');
+    const b = join(reposRoot, 'roots-b');
+    for (const [base, name] of [[a, 'alpha'], [b, 'beta']] as const) {
+      const p = join(base, name);
+      mkdirSync(p, { recursive: true });
+      git(p, 'init -q -b main');
+      makeCommit(p, 'f.txt', '1', 'first');
+    }
+    const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+    config.repos_dirs = [a, b];
+    writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+    const result = sabConfig('briefing --all', env);
+    expect(result.stdout).toContain('alpha');
+    expect(result.stdout).toContain('beta');
+  });
+
+  it('excludes same-basename repos across roots and warns (collision)', () => {
+    const reposRoot = dirname(env.configPath);
+    const a = join(reposRoot, 'roots-a');
+    const b = join(reposRoot, 'roots-b');
+    for (const base of [a, b]) {
+      const p = join(base, 'demo');
+      mkdirSync(p, { recursive: true });
+      git(p, 'init -q -b main');
+      makeCommit(p, 'f.txt', '1', 'first');
+    }
+    const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+    config.repos_dirs = [a, b];
+    writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+    const result = sabConfig('briefing --all', env);
+    // Not rendered as a working repo header...
+    expect(result.stdout).not.toMatch(/demo\s+\(main\)/);
+    // ...but surfaced in the skipped footer and warned on stderr.
+    expect(result.stdout).toContain('name-collision');
+    expect(result.stderr).toContain('demo');
+    expect(result.stderr).toMatch(/rename/i);
+  });
+
   it('Stale Branches subsection lists branches older than stale_branch_days', () => {
     // Lower the threshold so we can age branches realistically with --date
     const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));

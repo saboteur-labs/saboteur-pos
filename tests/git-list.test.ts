@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { execSync } from 'child_process';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
@@ -88,6 +88,47 @@ describe('sab git list', () => {
     expect(lines.find((l) => l.includes('alpha'))!).toMatch(/^\*\s/);
     expect(lines.find((l) => l.includes('beta'))!).not.toMatch(/^\*\s/);
     expect(result.stdout).toContain('* = in context');
+  });
+
+  it('lists working repos from multiple repos_dirs', () => {
+    const reposRoot = dirname(env.configPath);
+    const a = join(reposRoot, 'roots-a');
+    const b = join(reposRoot, 'roots-b');
+    for (const [base, name] of [[a, 'alpha'], [b, 'beta']] as const) {
+      const p = join(base, name);
+      mkdirSync(p, { recursive: true });
+      git(p, 'init -q -b main');
+      makeCommit(p, 'f.txt', '1', 'first');
+    }
+    const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+    config.repos_dirs = [a, b];
+    writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+    const result = sabConfig('git list', env);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('alpha');
+    expect(result.stdout).toContain('beta');
+  });
+
+  it('lists a cross-root basename collision in the skipped section and warns', () => {
+    const reposRoot = dirname(env.configPath);
+    const a = join(reposRoot, 'roots-a');
+    const b = join(reposRoot, 'roots-b');
+    for (const base of [a, b]) {
+      const p = join(base, 'demo');
+      mkdirSync(p, { recursive: true });
+      git(p, 'init -q -b main');
+      makeCommit(p, 'f.txt', '1', 'first');
+    }
+    const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+    config.repos_dirs = [a, b];
+    writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+    const result = sabConfig('git list', env);
+    expect(result.stdout).toContain('Skipped');
+    expect(result.stdout).toContain('name-collision');
+    expect(result.stderr).toMatch(/demo/);
+    expect(result.stderr).toMatch(/rename/i);
   });
 
   it('reports an empty state when no repos are found', () => {
