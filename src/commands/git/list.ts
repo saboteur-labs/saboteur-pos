@@ -1,7 +1,7 @@
-import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
+import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getContext } from '../../db/contexts.js';
-import { discoverRepos } from '../../git/discover.js';
+import { collisionWarning, discoverAllRepos } from '../../git/discover.js';
 import { getHeadState } from '../../git/read.js';
 import { c } from '../../colors.js';
 
@@ -18,11 +18,15 @@ export function runGitList(options: GitListOptions): void {
   const ctx = getContext(db, activeContext);
   db.close();
 
-  const reposDir = resolvePath(config.repos_dir);
-  const discovered = discoverRepos(reposDir);
+  const roots = getReposDirs(config);
+  const { repos: discovered, collisions } = discoverAllRepos(roots);
+
+  if (collisions.length > 0) {
+    process.stderr.write(collisionWarning(collisions) + '\n');
+  }
 
   if (discovered.length === 0) {
-    process.stdout.write(c.muted(`No repos found under ${reposDir}.\n`));
+    process.stdout.write(c.muted(`No repos found under ${roots.join(', ')}.\n`));
     return;
   }
 
@@ -56,7 +60,8 @@ export function runGitList(options: GitListOptions): void {
     process.stdout.write('\n' + c.muted('Skipped:\n'));
     const maxSkipName = Math.max(...skipped.map((s) => s.name.length));
     for (const s of skipped) {
-      const reason = s.kind === 'bare' ? 'bare' : 'read-error';
+      const reason =
+        s.kind === 'bare' ? 'bare' : s.kind === 'collision' ? 'name-collision' : 'read-error';
       process.stdout.write(c.muted(`  ${s.name.padEnd(maxSkipName)}  (${reason})\n`));
     }
   }

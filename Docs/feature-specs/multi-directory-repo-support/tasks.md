@@ -70,7 +70,7 @@
 **Depends on:** Task 1, Task 2
 **Estimate:** 2
 **Notes:** `git/list.ts` builds its own skipped reason inline (`bare ? 'bare' : 'read-error'`) — extend that mapping to handle `'collision'`. Preamble wording is unchanged by this feature.
-**Done:** [ ]
+**Done:** [x] — `runGitList` discovers via `getReposDirs` + `discoverAllRepos`; skipped-reason mapping extended with `'collision'→'name-collision'`; collision warning to stderr; empty-state message now lists all roots. Two new tests in `tests/git-list.test.ts` (multi-root listing; cross-root collision in Skipped + stderr warning). git-list suite 8/8; `tsc` clean. `*` marking and preamble unchanged.
 
 ---
 
