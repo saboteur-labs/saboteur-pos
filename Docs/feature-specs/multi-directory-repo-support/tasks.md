@@ -8,7 +8,9 @@
 **Depends on:** none
 **Estimate:** 2
 **Notes:** Do NOT filter out nonexistent directories here — FR-5 is satisfied downstream (`discoverRepos` already returns `[]` for a missing dir). De-dup AFTER `resolvePath` so `~/code` and an absolute equivalent collapse. `makeDefaultConfig` keeps emitting `repos_dir` only — no default `repos_dirs`.
-**Done:** [ ]
+**Done:** [x] — added `repos_dirs?: string[]` to `Config` and `getReposDirs(config)` in `src/config.ts` (filters empties, `resolvePath`-expands, de-dups via `Set`, repos_dir-first order). Unit tests in `src/config.test.ts` (7 passing, TDD red→green). `tsc` clean; init/config suites green.
+
+> **⚠️ Breakdown gap found during Task 1:** there are **4** direct `config.repos_dir` readers, not 3 — `src/git/index-job.ts:36` (the commit indexer) was missed. Tasks 3/4/5 cover briefing, git list, and context-repos; **a 5th wiring task is needed** to point `index-job` at `getReposDirs` + `discoverAllRepos`, otherwise commits in repos under a second root won't be indexed/linked to tasks. See Task 5b below.
 
 ---
 
@@ -82,6 +84,18 @@
 
 ---
 
+### Task 5b: Wire the commit indexer to multi-root discovery
+
+**What:** Make `indexCommits` scan working repos across all configured roots so commits in repos under any root link to tasks.
+**Files:** `src/git/index-job.ts`, `src/git/index-job.test.ts`
+**Done when:** `indexCommits` builds its working-repo list from `getReposDirs(config)` + `discoverAllRepos(...)` instead of `discoverRepos(resolvePath(config.repos_dir))` (line 36-37); a commit referencing a task in a repo under the **second** root is indexed into the `commits` table; collision-excluded basenames are not indexed (no ambiguous `commits.repo`); single-`repos_dir` indexing is unchanged.
+**Depends on:** Task 1, Task 2
+**Estimate:** 2
+**Notes:** Same one-line discovery swap as Tasks 3–5, keeping the `.filter(r => r.kind === 'working')`. `commits.repo` stays a basename (FR-8), which is why collision exclusion matters here — two repos with the same basename would otherwise produce ambiguous commit rows. This task was missed in the original breakdown (found during Task 1).
+**Done:** [ ]
+
+---
+
 ### Task 6: End-to-end + back-compat integration tests
 
 **What:** Cross-cutting tests for the union, the collision lifecycle, and single-`repos_dir` back-compat through the real CLI.
@@ -91,8 +105,9 @@
 - A config with only the legacy `repos_dir` behaves exactly as before (FR-3) — assert against the existing single-dir expectations.
 - Introducing a same-basename working repo under a second root removes BOTH from the rendered repo list, lists each as `name-collision` in the skipped footer, and emits the stderr warning (FR-9) — including the regression case where a previously-visible repo disappears.
 - A nonexistent directory in `repos_dirs` is skipped while other roots still render (FR-5).
+- A commit in a repo under a second root links to its task after indexing (FR-2, via Task 5b).
 - Full suite passes.
-**Depends on:** Task 3, Task 4, Task 5
+**Depends on:** Task 3, Task 4, Task 5, Task 5b
 **Estimate:** 3
 **Notes:** Reuse the `makeRepo`/`git init` helpers from the existing briefing and context-repos tests. Multi-dir tests must post-edit the config JSON to add `repos_dirs` (the `createTestEnv` helper only writes `repos_dir`).
 **Done:** [ ]
@@ -101,9 +116,9 @@
 
 ## Summary
 
-- Total tasks: 6 (15 story points) + 1 manual review gate (unpointed)
-- Total estimated effort: 15 story points; the gate adds wall-clock review time, not points.
-- Critical path: Tasks 2 → 3 → **Gate A** → 6 (with Task 1 a shared prerequisite of 3/4/5, and Tasks 4/5 parallel to 3)
+- Total tasks: 7 (17 story points) + 1 manual review gate (unpointed)
+- Total estimated effort: 17 story points; the gate adds wall-clock review time, not points.
+- Critical path: Tasks 2 → 3 → **Gate A** → 6 (with Task 1 a shared prerequisite of 3/4/5/5b, and Tasks 4/5/5b parallel to 3)
 - Manual gate: **Gate A** (after Task 3) — reviews the collision exclusion and the disappearing-repo behaviour in the briefing, the highest-UX-risk surface; blocks the integration-test task.
 - Risks:
   - **Task 2** — the collision guard is the conceptual core; getting "exclude *all* colliding repos" right (not first-wins) and keeping `discoverRepos` untouched is the main correctness risk. The new `'collision'` kind ripples into every caller's skipped-reason mapping (Tasks 3–4).

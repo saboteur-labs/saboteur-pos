@@ -21,6 +21,7 @@ export interface Config {
   db_path: string;
   secrets_path: string;
   repos_dir: string; // Phase 2a stub — not used in Phase 1
+  repos_dirs?: string[]; // additional repo roots; unioned with repos_dir
   active_context: string;
   briefing: BriefingConfig;
   sources: SourceConfig[];
@@ -33,6 +34,18 @@ export function resolvePath(p: string): string {
     return join(homedir(), p.slice(2));
   }
   return p;
+}
+
+/**
+ * Resolve the effective list of repo roots: the tilde/absolute-expanded,
+ * de-duplicated union of `repos_dir` (when present) and `repos_dirs`.
+ * Nonexistent directories are NOT filtered here — discovery handles that.
+ */
+export function getReposDirs(config: Config): string[] {
+  const raw = [config.repos_dir, ...(config.repos_dirs ?? [])].filter(
+    (p): p is string => Boolean(p),
+  );
+  return [...new Set(raw.map(resolvePath))];
 }
 
 export function loadConfig(configPath?: string): Config {
