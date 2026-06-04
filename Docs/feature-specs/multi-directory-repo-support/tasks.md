@@ -39,7 +39,9 @@
 **Depends on:** Task 1, Task 2
 **Estimate:** 3
 **Notes:** Repos still flow through the context `repos` scope filter after discovery — multi-root only changes the candidate set (FR-8 names stay basenames). Test with a config carrying `repos_dirs` (post-edit the JSON as the stale-branch test already does).
-**Done:** [ ]
+**Done:** [x] — `collectRepoState` now discovers via `getReposDirs` + `discoverAllRepos`; added `'name-collision'` to the `SkippedRepo` reason and the `'collision'→'name-collision'` mapping; threaded `collisions` out and write `collisionWarning(...)` to **stderr** in `runBriefing`. Two new tests in `tests/layer6-briefing.test.ts` (multi-root union via `--all`; collision exclusion + footer + stderr warning). Back-compat 24 existing tests green; full suite 190/190; `tsc` clean.
+
+> **Test-harness change (beyond stated files):** `tests/helpers.ts` `sab()` switched from `execSync` to `spawnSync` so stderr is captured on the success path (exit 0). The old helper hardcoded `stderr: ''` on success, making the FR-9 warning un-assertable. Reused by Task 4 (git list warning) and Task 6. No test regressed.
 
 ---
 

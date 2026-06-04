@@ -1,4 +1,4 @@
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -66,20 +66,19 @@ export function sab(
   args: string,
   cwd = process.cwd(),
 ): { stdout: string; stderr: string; code: number } {
-  try {
-    const result = execSync(`${SAB} ${args}`, {
-      encoding: 'utf-8',
-      cwd,
-      env: { ...process.env, EDITOR: 'true' }, // 'true' exits 0 without doing anything
-    });
-    return { stdout: result, stderr: '', code: 0 };
-  } catch (err: any) {
-    return {
-      stdout: err.stdout ?? '',
-      stderr: err.stderr ?? '',
-      code: err.status ?? 1,
-    };
-  }
+  // spawnSync (vs execSync) captures stderr on success too, not just on throw —
+  // needed to assert warnings emitted by commands that still exit 0.
+  const result = spawnSync(`${SAB} ${args}`, {
+    encoding: 'utf-8',
+    cwd,
+    shell: true,
+    env: { ...process.env, EDITOR: 'true' }, // 'true' exits 0 without doing anything
+  });
+  return {
+    stdout: result.stdout ?? '',
+    stderr: result.stderr ?? '',
+    code: result.status ?? 1,
+  };
 }
 
 export function sabConfig(args: string, env: TestEnv): ReturnType<typeof sab> {
