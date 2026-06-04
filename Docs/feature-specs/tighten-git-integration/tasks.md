@@ -131,7 +131,7 @@
   **Depends on:** Task 3, Task 4
   **Estimate:** 3
   **Notes:** The flip in Task 4 will break any existing assertion that relied on the show-all default — grep the briefing test for Repo State expectations first.
-  **Done:** [ ]
+  **Done:** [x] — most coverage landed incrementally (Task 3: `context-repos` FR-1/2/3/4/9; Task 4: fixed the 5 broken briefing tests; Task 5: hint + `--all` FR-6/7/8; Task 6: FR-10). This task's net-new contribution: closed the one remaining gap with an explicit **FR-5** test (`context-repos`: absolute path rejected, matched on basename only). Audited every FR → test; all mapped. Full suite **176/176** across 19 files (the intermittent `ui-file-watcher` failure is pre-existing environmental flakiness, green on a clean run).
 
 ---
 
@@ -147,7 +147,7 @@
   **Pass criteria:** a user hitting the original problem would consider it fixed, and the workflow is discoverable without reading the spec.
   **On fail:** file follow-up tasks for the specific rough edges found.
   **Depends on:** Task 7.
-  **Done:** [ ]
+  **Done:** [x]
 
 ---
 

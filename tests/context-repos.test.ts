@@ -56,6 +56,18 @@ describe('sab context repos', () => {
     expect(list.stdout).toContain('(no repos linked)');
   });
 
+  it('add matches on basename only — an absolute path is rejected (FR-5)', () => {
+    makeRepo(env, 'varsentry');
+    const root = dirname(env.dbPath);
+    const absPath = join(root, 'varsentry');
+    const add = sabConfig(`context repos add work ${absPath}`, env);
+    expect(add.code).toBe(1);
+    expect(add.stderr).toContain(`'${absPath}' not found under repos_dir`);
+
+    const list = sabConfig('context repos work', env);
+    expect(list.stdout).toContain('(no repos linked)');
+  });
+
   it('add de-duplicates against existing and within input', () => {
     makeRepo(env, 'varsentry');
     makeRepo(env, 'landing');
