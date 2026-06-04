@@ -43,6 +43,7 @@ Commands:
   sab init                     Initialize workspace
   sab status                   System state (read-only)
   sab briefing [--context]     Daily briefing (read-only)
+  sab briefing --all           Daily briefing showing all repos (ignore context scope)
   sab briefing --weekly        7-day shipped/stalled/repo-activity report
   sab sync                     Rebuild knowledge index from disk
   sab git list                 List valid repos under repos_dir with their branches
@@ -295,6 +296,7 @@ program
   .command('briefing')
   .description('Run the daily briefing (read-only)')
   .option('--context <slug>', 'Run briefing for a different context')
+  .option('--all', 'Show all repos under repos_dir, ignoring the context scope')
   .option('--weekly', 'Run the weekly briefing instead of the daily one')
   .option('--config <path>', 'Path to config file')
   .action((options) => runBriefing(options));

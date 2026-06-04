@@ -152,6 +152,8 @@ describe('Layer 6 — Daily Briefing', () => {
     mkdirSync(repoPath);
     git(repoPath, 'init -q -b main');
     makeCommit(repoPath, 'a.txt', '1', `fix login [${id}]`);
+    // Repos are opt-in per context: link it so the active context shows it.
+    sabConfig('context repos add inbox demo', env);
 
     const result = sabConfig('briefing', env);
     expect(result.stdout).toContain('── Repo State');
@@ -170,6 +172,7 @@ describe('Layer 6 — Daily Briefing', () => {
     makeCommit(repoPath, 'a.txt', '1', 'first');
     const sha = git(repoPath, 'rev-parse HEAD').trim();
     git(repoPath, `checkout -q ${sha}`);
+    sabConfig('context repos add inbox demo', env);
 
     const result = sabConfig('briefing', env);
     expect(result.stdout).toContain('detached @');
@@ -183,6 +186,7 @@ describe('Layer 6 — Daily Briefing', () => {
     git(repoPath, 'init -q -b main');
     makeCommit(repoPath, 'a.txt', '1', 'first');
     writeFileSync(join(repoPath, 'b.txt'), 'untracked');
+    sabConfig('context repos add inbox demo', env);
 
     const result = sabConfig('briefing', env);
     expect(result.stdout).toContain('dirty');
@@ -191,6 +195,35 @@ describe('Layer 6 — Daily Briefing', () => {
   it('Section 8 is omitted when repos_dir has no working repos', () => {
     const result = sabConfig('briefing', env);
     expect(result.stdout).not.toContain('── Repo State');
+  });
+
+  it('empty-scope context shows the link hint, not the repo', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'first');
+    // inbox has no repos linked.
+
+    const result = sabConfig('briefing', env);
+    expect(result.stdout).toContain("(no repos linked to 'inbox')");
+    expect(result.stdout).toContain('sab context repos add inbox');
+    expect(result.stdout).not.toContain('demo');
+  });
+
+  it('--all bypasses repo scoping and shows all working repos without the hint', () => {
+    const reposRoot = dirname(env.configPath);
+    const repoPath = join(reposRoot, 'demo');
+    mkdirSync(repoPath);
+    git(repoPath, 'init -q -b main');
+    makeCommit(repoPath, 'a.txt', '1', 'first');
+    // inbox still has no repos linked — --all must show it anyway.
+
+    const result = sabConfig('briefing --all', env);
+    expect(result.code).toBe(0);
+    expect(result.stdout).toContain('demo');
+    expect(result.stdout).toContain('main');
+    expect(result.stdout).not.toContain('no repos linked');
   });
 
   it('Stale Branches subsection lists branches older than stale_branch_days', () => {
@@ -214,6 +247,7 @@ describe('Layer 6 — Daily Briefing', () => {
       { cwd: repoPath },
     );
     git(repoPath, 'checkout -q main');
+    sabConfig('context repos add inbox demo', env);
 
     const result = sabConfig('briefing', env);
     expect(result.stdout).toContain('Stale Branches');
@@ -235,6 +269,7 @@ describe('Layer 6 — Daily Briefing', () => {
     const broken = join(reposRoot, 'broken');
     mkdirSync(broken);
     writeFileSync(join(broken, '.git'), 'gitdir: /nowhere');
+    sabConfig('context repos add inbox working', env);
 
     const result = sabConfig('briefing', env);
     expect(result.code).toBe(0);

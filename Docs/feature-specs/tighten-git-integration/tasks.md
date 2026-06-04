@@ -73,7 +73,7 @@
   **Depends on:** none
   **Estimate:** 3
   **Notes:** Two coupled changes: the filter in `collectRepoState` (empty array → empty set, not `null`) and the omit-guard in `renderRepoState` (currently returns `[]` when no repos/skipped). Thread an "is scope empty" signal out of `collectRepoState` so the renderer can choose the hint vs the normal omit. This is a deliberate behaviour change to existing briefing output — see Task 7 for the test fallout.
-  **Done:** [ ]
+  **Done:** [x] — `collectRepoState` now scopes via `ctx?.repos ?? []` (empty = none) and returns `showLinkHint`; `renderRepoState(state, activeContext)` emits `(no repos linked to '<slug>')` + `Link with: sab context repos add <slug> <repo>`. **UX refinement for Gate B:** the hint shows only when scope is empty AND ≥1 working repo exists under `repos_dir` — if zero repos are discovered, the section stays omitted (no nag to link nonexistent repos). The 5 existing briefing tests broken by the flip were fixed in place (link the repo first) to keep the suite green — this pulls forward the "update existing tests" half of Task 7; Task 7 now owns only net-new coverage. Full suite 172/172; `tsc` clean.
 
 ---
 
@@ -85,7 +85,7 @@
 **Depends on:** Task 4
 **Estimate:** 2
 **Notes:** Confirm whether the `briefing` command already accepts `--all`; the registration around `src/index.ts:40` shows only `[--context]`. If absent, add `.option('--all', ...)` and thread a flag into `runBriefing` → `collectRepoState` that forces the unscoped (all working repos) path.
-**Done:** [ ]
+**Done:** [x] — `briefing` had no `--all`; added the option (+ help) in `src/index.ts`, `all?: boolean` on `BriefingOptions`, and a `bypassScope` param on `collectRepoState` that skips the filter and forces `showLinkHint=false`. Two net-new tests in `tests/layer6-briefing.test.ts` (empty-scope hint; `--all` shows all without hint) — these also discharge Task 7's remaining net-new coverage. Briefing suite 24/24; `tsc` clean. (Full-suite: the lone `ui-file-watcher` failure is pre-existing environmental flakiness — reproduced with my changes stashed out.)
 
 ---
 
@@ -103,7 +103,7 @@
   **On fail:** loop back to Task 4 (filter/renderer coupling) or Task 5 (`--all` path).
   **Blocks:** Task 7.
   **Depends on:** Task 5.
-  **Done:** [ ]
+  **Done:** [x]
 
 ---
 
@@ -125,7 +125,7 @@
 **Files:** `tests/layer6-briefing.test.ts`, `tests/layer3-contexts.test.ts`
 **Done when:**
 
-- Briefing tests asserting that an unscoped context shows all repos are updated to expect zero repos + the "no repos linked" hint (FR-6/7), and `--all` is covered as showing all (FR-8).
+- ~~Briefing tests asserting that an unscoped context shows all repos are updated to expect zero repos~~ (done in Task 4 to keep the suite green). Remaining net-new coverage: a test asserting the "(no repos linked)" hint renders for an empty-scope context with repos present, and `--all` covered as showing all (FR-8).
 - New context tests cover: add de-dupes and persists (FR-2), remove no-ops on absent names (FR-3), add rejects an unknown repo with the exact FR-4 message and writes nothing, list prints the empty message (FR-1), and all subcommands error on a nonexistent context (FR-9).
 - The full test suite passes.
   **Depends on:** Task 3, Task 4
