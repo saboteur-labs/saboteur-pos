@@ -58,7 +58,7 @@
 **On fail:** loop back to Task 2 (collision detection/return shape) or Task 3 (footer/warning rendering).
 **Blocks:** Task 6.
 **Depends on:** Task 3.
-**Done:** [ ]
+**Done:** [x]
 
 ---
 
@@ -112,7 +112,7 @@
 **Depends on:** Task 3, Task 4, Task 5, Task 5b
 **Estimate:** 3
 **Notes:** Reuse the `makeRepo`/`git init` helpers from the existing briefing and context-repos tests. Multi-dir tests must post-edit the config JSON to add `repos_dirs` (the `createTestEnv` helper only writes `repos_dir`).
-**Done:** [ ]
+**Done:** [x] — new `tests/multi-repos-dir.test.ts` (5 tests): multi-root union in git list + briefing (FR-2); legacy single-`repos_dir` back-compat (FR-3); the disappearing-repo collision regression with footer + stderr warning (FR-9); nonexistent-dir skip (FR-5); end-to-end commit indexing of a repo under a second root via `task view` (FR-2/Task 5b). Full suite **201/201** across 21 files; `tsc` clean.
 
 ---
 
