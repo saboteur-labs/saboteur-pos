@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3';
 import type { Config } from '../config.js';
 import { upsertCommit, type CommitInput } from '../db/commits.js';
-import { resolvePath } from '../config.js';
-import { discoverRepos } from './discover.js';
+import { getReposDirs } from '../config.js';
+import { discoverAllRepos } from './discover.js';
 import { extractTaskIds } from './parse.js';
 import { GitTimeoutError, getCommitsSince, listBranches, withGitTimeout } from './read.js';
 
@@ -33,8 +33,10 @@ export function indexCommits(
   options: IndexCommitsOptions = {},
 ): IndexCommitsResult {
   const horizonDays = options.horizonDays ?? DEFAULT_HORIZON_DAYS;
-  const reposDir = resolvePath(config.repos_dir);
-  const repos = discoverRepos(reposDir).filter((r) => r.kind === 'working');
+  // Index across all configured roots; collision-excluded basenames are
+  // kind 'collision' (not 'working'), so they are skipped — no ambiguous
+  // commits.repo rows.
+  const repos = discoverAllRepos(getReposDirs(config)).repos.filter((r) => r.kind === 'working');
 
   const taskIds = new Set(
     (db.prepare(`SELECT id FROM tasks`).all() as Array<{ id: string }>).map((r) => r.id),

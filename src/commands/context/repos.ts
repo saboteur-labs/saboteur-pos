@@ -1,7 +1,7 @@
-import { DEFAULT_CONFIG_PATH, loadConfig, resolvePath } from '../../config.js';
+import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { addContextRepos, getContext, removeContextRepos } from '../../db/contexts.js';
-import { discoverRepos } from '../../git/discover.js';
+import { discoverAllRepos } from '../../git/discover.js';
 import { c } from '../../colors.js';
 
 interface ReposOptions {
@@ -43,9 +43,11 @@ export function runContextReposAdd(slug: string, repos: string[], options: Repos
   }
 
   // Validate every name against discovered working repos before any write.
+  // Collision-excluded basenames are kind 'collision', not 'working', so an
+  // ambiguous name is intentionally not linkable.
   const working = new Set(
-    discoverRepos(resolvePath(config.repos_dir))
-      .filter((r) => r.kind === 'working')
+    discoverAllRepos(getReposDirs(config))
+      .repos.filter((r) => r.kind === 'working')
       .map((r) => r.name),
   );
   for (const repo of repos) {

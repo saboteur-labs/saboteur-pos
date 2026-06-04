@@ -206,4 +206,43 @@ describe('indexCommits', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].message).toContain('new');
   });
+
+  it('indexes commits from repos across multiple roots (FR-2)', () => {
+    seedTask(db, 'task_aaaaaaaa');
+    seedTask(db, 'task_bbbbbbbb');
+    const a = join(root, 'roots-a');
+    const b = join(root, 'roots-b');
+    const repoA = join(a, 'alpha');
+    mkdirSync(repoA, { recursive: true });
+    git(repoA, 'init -q -b main');
+    makeCommit(repoA, 'a.txt', '1', 'first [task_aaaaaaaa]');
+    const repoB = join(b, 'beta');
+    mkdirSync(repoB, { recursive: true });
+    git(repoB, 'init -q -b main');
+    makeCommit(repoB, 'b.txt', '1', 'second [task_bbbbbbbb]');
+
+    const result = indexCommits(db, { ...configFor(''), repos_dirs: [a, b] });
+    expect(result.reposScanned).toBe(2);
+    const rows = db.prepare(`SELECT repo, task_id FROM commits ORDER BY repo`).all();
+    expect(rows).toEqual([
+      { repo: 'alpha', task_id: 'task_aaaaaaaa' },
+      { repo: 'beta', task_id: 'task_bbbbbbbb' },
+    ]);
+  });
+
+  it('skips a basename that collides across roots (no ambiguous commits.repo)', () => {
+    seedTask(db, 'task_a1b2c3d4');
+    const a = join(root, 'roots-a');
+    const b = join(root, 'roots-b');
+    for (const base of [a, b]) {
+      const p = join(base, 'demo');
+      mkdirSync(p, { recursive: true });
+      git(p, 'init -q -b main');
+      makeCommit(p, 'x.txt', '1', 'work [task_a1b2c3d4]');
+    }
+
+    const result = indexCommits(db, { ...configFor(''), repos_dirs: [a, b] });
+    expect(result.reposScanned).toBe(0);
+    expect((db.prepare(`SELECT COUNT(*) as c FROM commits`).get() as { c: number }).c).toBe(0);
+  });
 });

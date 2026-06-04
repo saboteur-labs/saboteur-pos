@@ -1,16 +1,25 @@
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
 
 // Fabricate the minimal markers discover.ts classifies as a `working` repo:
 // a .git/ directory containing HEAD, objects/, and refs/.
-function makeRepo(env: TestEnv, name: string): void {
-  const root = dirname(env.dbPath);
-  const gitDir = join(root, name, '.git');
+function makeRepoIn(base: string, name: string): void {
+  const gitDir = join(base, name, '.git');
   mkdirSync(join(gitDir, 'objects'), { recursive: true });
   mkdirSync(join(gitDir, 'refs'), { recursive: true });
   writeFileSync(join(gitDir, 'HEAD'), 'ref: refs/heads/main\n');
+}
+
+function makeRepo(env: TestEnv, name: string): void {
+  makeRepoIn(dirname(env.dbPath), name);
+}
+
+function setReposDirs(env: TestEnv, dirs: string[]): void {
+  const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+  config.repos_dirs = dirs;
+  writeFileSync(env.configPath, JSON.stringify(config, null, 2));
 }
 
 describe('sab context repos', () => {
@@ -99,6 +108,30 @@ describe('sab context repos', () => {
 
     const list = sabConfig('context repos work', env);
     expect(list.stdout).toContain('varsentry');
+  });
+
+  it('links a repo discovered under a secondary repos_dir', () => {
+    const b = join(dirname(env.dbPath), 'roots-b');
+    makeRepoIn(b, 'landing');
+    setReposDirs(env, [b]);
+
+    const add = sabConfig('context repos add work landing', env);
+    expect(add.code).toBe(0);
+    expect(sabConfig('context repos work', env).stdout).toContain('landing');
+  });
+
+  it('refuses to link a basename that collides across roots', () => {
+    const root = dirname(env.dbPath);
+    const a = join(root, 'roots-a');
+    const b = join(root, 'roots-b');
+    makeRepoIn(a, 'demo');
+    makeRepoIn(b, 'demo');
+    setReposDirs(env, [a, b]);
+
+    const add = sabConfig('context repos add work demo', env);
+    expect(add.code).toBe(1);
+    expect(add.stderr).toContain("'demo' not found under repos_dir");
+    expect(sabConfig('context repos work', env).stdout).toContain('(no repos linked)');
   });
 
   it('all subcommands error on a nonexistent context', () => {

@@ -82,7 +82,7 @@
 **Depends on:** Task 1, Task 2
 **Estimate:** 2
 **Notes:** Reuse the same `.filter(r => r.kind === 'working')` shape on the unioned result. A colliding name is intentionally unlinkable — it has no unambiguous identity.
-**Done:** [ ]
+**Done:** [x] — `runContextReposAdd` validates against `discoverAllRepos(getReposDirs(config)).repos.filter(working)`; a repo under any root is linkable, a collision-excluded basename hits the existing FR-4 not-found error. Two new tests in `tests/context-repos.test.ts` (link via secondary `repos_dir`; refuse colliding basename). Suite 11/11; `tsc` clean; single-`repos_dir` behaviour unchanged.
 
 ---
 
@@ -94,7 +94,7 @@
 **Depends on:** Task 1, Task 2
 **Estimate:** 2
 **Notes:** Same one-line discovery swap as Tasks 3–5, keeping the `.filter(r => r.kind === 'working')`. `commits.repo` stays a basename (FR-8), which is why collision exclusion matters here — two repos with the same basename would otherwise produce ambiguous commit rows. This task was missed in the original breakdown (found during Task 1).
-**Done:** [ ]
+**Done:** [x] — `indexCommits` discovers via `getReposDirs` + `discoverAllRepos`; collision-excluded basenames (kind `'collision'`) are skipped so no ambiguous `commits.repo`. Two new tests in `src/git/index-job.test.ts` (index across roots; skip cross-root collision). index-job suite 10/10; `tsc` clean. Full suite 195/196 (the 1 failure is the pre-existing flaky `ui-file-watcher`).
 
 ---
 
