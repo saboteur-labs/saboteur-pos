@@ -115,7 +115,7 @@
 **Depends on:** Task 3
 **Estimate:** 1
 **Notes:** `git/list.ts:31` already implements the marking via `ctx.repos`. Its empty-scope message ("no repo scope set; all repos visible") now reads slightly inconsistently with briefing's opt-in default, but git list is an inventory tool and the spec does not ask to change it — leave as-is, or note for a follow-up.
-**Done:** [ ]
+**Done:** [x] — added an end-to-end test in `tests/git-list.test.ts` that links via the real `sab context repos add inbox alpha` flow and asserts `alpha` is marked `*`, `beta` is not, and `* = in context` prints (FR-10). `src/commands/git/list.ts` confirmed unchanged vs HEAD. git-list suite 6/6. **Follow-up noted (deferred):** git list's empty-scope preamble ("no repo scope set; all repos visible") is now inconsistent with briefing's opt-in default — left as-is per spec; flag for Gate C.
 
 ---
 
