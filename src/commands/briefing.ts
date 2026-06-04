@@ -22,6 +22,7 @@ interface BriefingOptions {
   context?: string;
   config?: string;
   weekly?: boolean;
+  all?: boolean;
 }
 
 const PRIORITY_ORDER = ['critical', 'high', 'normal', 'low'];
@@ -118,7 +119,13 @@ export function runBriefing(options: BriefingOptions): void {
   }
 
   // Collect repo state before closing DB
-  const repoState = collectRepoState(db, config, activeContext, indexResult.timedOut);
+  const repoState = collectRepoState(
+    db,
+    config,
+    activeContext,
+    indexResult.timedOut,
+    options.all ?? false,
+  );
 
   db.close();
 
@@ -196,7 +203,7 @@ export function runBriefing(options: BriefingOptions): void {
   }
 
   // Section 8: Repo State (omit if no tracked repos for this context)
-  const repoStateLines = renderRepoState(repoState);
+  const repoStateLines = renderRepoState(repoState, activeContext);
   if (repoStateLines.length > 0) {
     lines.push(c.label(`── Repo State ────────────────────────────────`));
     lines.push(...repoStateLines);
@@ -244,7 +251,13 @@ function collectRepoState(
   config: ReturnType<typeof loadConfig>,
   activeContext: string,
   timedOutFromIndex: string[] = [],
-): { repos: RepoStateEntry[]; staleBranches: StaleBranch[]; skipped: SkippedRepo[] } {
+  bypassScope = false,
+): {
+  repos: RepoStateEntry[];
+  staleBranches: StaleBranch[];
+  skipped: SkippedRepo[];
+  showLinkHint: boolean;
+} {
   const reposDir = resolvePath(config.repos_dir);
   const allDiscovered = discoverRepos(reposDir);
   const skipped: SkippedRepo[] = allDiscovered
@@ -252,17 +265,23 @@ function collectRepoState(
     .map((r) => ({ name: r.name, reason: r.kind === 'bare' ? 'bare' : 'read-error' }));
   const timedOutSet = new Set(timedOutFromIndex);
   const discovered = allDiscovered.filter((r) => r.kind === 'working');
-  if (discovered.length === 0 && skipped.length === 0 && timedOutSet.size === 0) {
-    return { repos: [], staleBranches: [], skipped: [] };
-  }
 
+  // Repos are opt-in per context: only repos in the context's `repos` array
+  // are shown. An empty scope shows none — and, when there are repos that
+  // could be linked, a hint guiding the user to link them. `--all`
+  // (bypassScope) ignores the scope entirely and shows every working repo.
   const ctx = getContext(db, activeContext);
-  const allowed = ctx && ctx.repos.length > 0 ? new Set(ctx.repos) : null;
-  const filtered = allowed
-    ? discovered.filter((r) => allowed.has(r.name))
-    : discovered;
-  if (filtered.length === 0 && skipped.length === 0 && timedOutSet.size === 0) {
-    return { repos: [], staleBranches: [], skipped: [] };
+  const scope = ctx?.repos ?? [];
+  const showLinkHint = !bypassScope && scope.length === 0 && discovered.length > 0;
+  const allowed = new Set(scope);
+  const filtered = bypassScope ? discovered : discovered.filter((r) => allowed.has(r.name));
+  if (
+    filtered.length === 0 &&
+    skipped.length === 0 &&
+    timedOutSet.size === 0 &&
+    !showLinkHint
+  ) {
+    return { repos: [], staleBranches: [], skipped: [], showLinkHint };
   }
 
   const commitQuery = db.prepare(
@@ -318,16 +337,24 @@ function collectRepoState(
     }
   }
 
-  return { repos, staleBranches, skipped };
+  return { repos, staleBranches, skipped, showLinkHint };
 }
 
-function renderRepoState(state: {
-  repos: RepoStateEntry[];
-  staleBranches: StaleBranch[];
-  skipped: SkippedRepo[];
-}): string[] {
-  if (state.repos.length === 0 && state.skipped.length === 0) return [];
+function renderRepoState(
+  state: {
+    repos: RepoStateEntry[];
+    staleBranches: StaleBranch[];
+    skipped: SkippedRepo[];
+    showLinkHint: boolean;
+  },
+  activeContext: string,
+): string[] {
+  if (state.repos.length === 0 && state.skipped.length === 0 && !state.showLinkHint) return [];
   const lines: string[] = [];
+  if (state.showLinkHint) {
+    lines.push(c.muted(`  (no repos linked to '${activeContext}')`));
+    lines.push(c.muted(`  Link with: sab context repos add ${activeContext} <repo>`));
+  }
   for (const repo of state.repos) {
     const dirtyLabel = repo.dirty ? c.amber('✘ dirty') : c.muted('✓ clean');
     lines.push(`  ${c.cyan(repo.name)}  ${c.muted(`(${repo.headLabel})`)}  ${dirtyLabel}`);

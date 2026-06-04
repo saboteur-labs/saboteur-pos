@@ -70,6 +70,26 @@ describe('sab git list', () => {
     expect(result.stdout).toContain('* = in context');
   });
 
+  it('marks repos linked via `sab context repos add` with an asterisk', () => {
+    const reposRoot = dirname(env.configPath);
+    for (const name of ['alpha', 'beta']) {
+      const p = join(reposRoot, name);
+      mkdirSync(p);
+      git(p, 'init -q -b main');
+      makeCommit(p, 'f.txt', '1', 'initial');
+    }
+
+    // Link via the real CLI flow, not a raw DB write.
+    expect(sabConfig('context repos add inbox alpha', env).code).toBe(0);
+
+    const result = sabConfig('git list', env);
+    expect(result.code).toBe(0);
+    const lines = result.stdout.split('\n');
+    expect(lines.find((l) => l.includes('alpha'))!).toMatch(/^\*\s/);
+    expect(lines.find((l) => l.includes('beta'))!).not.toMatch(/^\*\s/);
+    expect(result.stdout).toContain('* = in context');
+  });
+
   it('reports an empty state when no repos are found', () => {
     const result = sabConfig('git list', env);
     expect(result.code).toBe(0);
