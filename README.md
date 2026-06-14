@@ -40,6 +40,7 @@ sab init
 ```
 
 Creates:
+
 - `~/saboteur/saboteur.db` — SQLite database
 - `~/saboteur/notes/` — Markdown notes directory
 - `~/saboteur/saboteur.config.json` — config
@@ -119,10 +120,10 @@ Point it at the directory that holds your repos by editing `~/saboteur/saboteur.
 
 ```json
 {
-  "repos_dir": "~/work/repos",
-  "briefing": {
-    "stale_branch_days": 14
-  }
+    "repos_dir": "~/work/repos",
+    "briefing": {
+        "stale_branch_days": 14
+    }
 }
 ```
 
@@ -142,7 +143,7 @@ To scope which repos appear under a specific context, set `contexts.repos` for t
 Include the full task ID in square brackets in any commit message:
 
 ```
-fix login redirect [task_a1b2c3d4]
+fix(login): fix login redirect [task_a1b2c3d4]
 ```
 
 The next `sab briefing` indexes the commit, exposes it under `sab task view <id>`, and auto-updates the task's `repo` / `branch` fields. Bare task IDs, conventional-commit scopes, and trailers are intentionally ignored — the bracketed form is canonical.
@@ -163,12 +164,12 @@ npm run test:watch
 
 ## Architecture
 
-| Layer | What |
-|---|---|
-| SQLite | Tasks, contexts, knowledge index (derived cache), commits (derived from git) |
-| Markdown | Notes — source of truth |
-| Git repos | Source of truth for repo/branch state and commits; scanned locally from `repos_dir` |
-| Config JSON | Runtime config — paths, active context |
-| Secrets JSON | Plugin credentials — gitignored |
+| Layer        | What                                                                                |
+| ------------ | ----------------------------------------------------------------------------------- |
+| SQLite       | Tasks, contexts, knowledge index (derived cache), commits (derived from git)        |
+| Markdown     | Notes — source of truth                                                             |
+| Git repos    | Source of truth for repo/branch state and commits; scanned locally from `repos_dir` |
+| Config JSON  | Runtime config — paths, active context                                              |
+| Secrets JSON | Plugin credentials — gitignored                                                     |
 
 See `Docs/CoreSpec/` for the full behavioral spec (LOGIC.md, SCHEMA.md, CLI.md, PHASES.md).
