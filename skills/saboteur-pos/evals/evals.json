@@ -1,0 +1,58 @@
+{
+  "skill_name": "saboteur-pos",
+  "note": "Iteration 1 evals for the note-capture increment. Baseline = old-skill-snapshot (notes under 'not yet wired').",
+  "evals": [
+    {
+      "id": 0,
+      "name": "verbatim-note",
+      "prompt": "take a note: the staging DB wipes every night at 2am, so don't trust any data older than that when I'm debugging the importer",
+      "expected_output": "Writes the note verbatim via `sab note new ... --body` (no $EDITOR), preserving the user's exact wording in the body and deriving a short title. No premature back-and-forth asking for content it already has.",
+      "files": [],
+      "assertions": [
+        {"text": "Creates the note non-interactively with `sab note new` and `--body` (does not open $EDITOR)"},
+        {"text": "The note body preserves the user's wording verbatim (not reworded or summarized)"},
+        {"text": "Derives a concise title (a few words), not the full sentence as the title"},
+        {"text": "Does not stall asking the user for content it was already given"}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "derived-show-first",
+      "prompt": "ok that login bug finally makes sense. turned out the auth server's clock was running ~40 seconds ahead, so every JWT it minted looked not-yet-valid to the other services and they bounced it, which showed up as a retry loop. fixed it by turning NTP back on. make a note about this for me so future-me remembers to check clock drift before assuming it's a token bug — you write it up.",
+      "expected_output": "Because the user asked the agent to compose ('you write it up'), the agent drafts the note (title + body) and SHOWS it for approval BEFORE writing. It does not call `sab note new` until approved. The composed body accurately captures the clock-skew cause and the NTP fix.",
+      "files": [],
+      "assertions": [
+        {"text": "Presents a drafted note (title and body) to the user before writing anything"},
+        {"text": "Does NOT call `sab note new` before showing the draft / getting approval (no premature write)"},
+        {"text": "The composed note accurately reflects the clock-skew cause and the NTP fix"},
+        {"text": "Scopes the note to the right context (resolves context first, or otherwise targets getwrite-development)"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "proactive-offer",
+      "prompt": "Before I extend this, does the parse step look ok? I'm about to add retry logic on top of it.\n\n```python\ndef load_rows(path):\n    try:\n        with open(path) as f:\n            return [parse(line) for line in f]\n    except Exception:\n        return []\n```",
+      "expected_output": "The agent reviews the code, notices the bare `except Exception: return []` silently swallows all errors (a landmine, especially before adding retry logic), and PROACTIVELY OFFERS to capture a note about it in a light one-liner. It does not silently create the note, and the offer is not a heavy interruption.",
+      "files": [],
+      "assertions": [
+        {"text": "Proactively offers to capture a note (the user did not ask for one)"},
+        {"text": "Does NOT silently create the note (no `sab note new` without the user's consent)"},
+        {"text": "The offer is lightweight (a line or so), not a heavy multi-step interruption"},
+        {"text": "Correctly identifies the note-worthy issue: the bare except silently swallows errors"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "task-link",
+      "prompt": "take a note: tiptap table insertion still drops the header row when you paste in a multi-row table from Google Docs",
+      "expected_output": "Writes the verbatim note, then notices a clearly-related task on the list (add-tiptap-table-functionality, task_7971678f) and OFFERS to link the note to it, asking before adding `--task`. Uses the exact full task id.",
+      "files": [],
+      "assertions": [
+        {"text": "Writes the verbatim note with the body preserved"},
+        {"text": "Identifies the related task (add-tiptap-table-functionality) and offers to link the note to it"},
+        {"text": "Asks for confirmation before adding `--task` (does not link silently)"},
+        {"text": "When referencing/linking the task, uses the exact full id task_7971678f (not abbreviated)"}
+      ]
+    }
+  ]
+}
