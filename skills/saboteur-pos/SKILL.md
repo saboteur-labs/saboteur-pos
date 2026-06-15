@@ -2,23 +2,27 @@
 name: saboteur-pos
 description: >-
   Drive Saboteur POS (the `sab` CLI) for personal tasks, notes, and a daily
-  briefing. Three capabilities are actively guided: (1) putting you in the RIGHT
+  briefing. Four capabilities are actively guided: (1) putting you in the RIGHT
   context — every `sab` action is context-scoped, so it maps the current git
-  repository to its Saboteur context and switches to it; (2) linking git commits
-  to tasks — before a commit it checks the task list and, with the user's OK,
-  embeds the matching task ID in the message; and (3) capturing notes — when the
-  user says "take a note" (capture it verbatim and confirm it back before saving)
-  or "make a note" (draft it and show them first), AND proactively offering to
-  note bugs, landmines, follow-up work,
+  repository to its Saboteur context and switches to it; (2) running the daily
+  briefing as an action hub — it scopes the briefing to the right context (or
+  `--all` across every repo), reads the report, and offers the natural follow-ups
+  it surfaces (stale tasks, blocked work, in-review work, unlinked commits, "what
+  should I work on"); (3) linking git commits to tasks — before a commit it
+  checks the task list and, with the user's OK, embeds the matching task ID in the
+  message; and (4) capturing notes — when the user says "take a note" (capture it
+  verbatim and confirm it back before saving) or "make a note" (draft it and show
+  them first), AND proactively offering to note bugs, landmines, follow-up work,
   decisions, or insights that surface while working, linking a note to a task
-  when it's relevant. For the briefing and standalone task add/move/done it
-  reports those aren't wired in yet and offers to run the raw `sab` command. Use
-  this skill whenever you start working in a repository, are about to commit,
-  want to jot/save/capture/record a note, thought, or insight, or whenever the
-  user mentions sab, saboteur, their tasks, notes, briefing, backlog, or "what
-  should I work on" — even if they don't name the tool. This is the local
-  Saboteur `sab` CLI — not Jira, Trello, Obsidian, or a repo's GitHub issues;
-  don't engage for those. Also invoke it directly to switch or check context.
+  when it's relevant. For standalone task add/move/done it reports those aren't
+  wired in yet and offers to run the raw `sab` command. Use this skill whenever
+  you start working in a repository, are about to commit, want a briefing or to
+  know what to work on, want to jot/save/capture/record a note, thought, or
+  insight, or whenever the user mentions sab, saboteur, their tasks, notes,
+  briefing, backlog, standup, or "what should I work on" — even if they don't
+  name the tool. This is the local Saboteur `sab` CLI — not Jira, Trello,
+  Obsidian, or a repo's GitHub issues; don't engage for those. Also invoke it
+  directly to switch or check context.
 ---
 
 # Saboteur POS
@@ -36,30 +40,34 @@ deterministically with a script.
 
 ## Current scope
 
-Three capabilities, all built on the same foundation — knowing which context the
+Four capabilities, all built on the same foundation — knowing which context the
 current repo belongs to:
 
 1. **Resolve the current repository to its context and switch to it** (below).
    Every other `sab` action depends on this running first.
-2. **Link git commits to tasks** — when you're about to commit work, check
+2. **Run the daily briefing as an action hub** — scope it correctly, read the
+   report *with* the user, and offer the follow-ups it surfaces (stale/blocked/
+   in-review tasks, unlinked commits) by routing into the capabilities below
+   ([Running the briefing](#running-the-briefing)).
+3. **Link git commits to tasks** — when you're about to commit work, check
    whether it advances a tracked task and, with the user's OK, record the link
    in the commit message ([Linking commits to tasks](#linking-commits-to-tasks)).
-3. **Capture notes** — write down what the user dictates, draft notes they ask
+4. **Capture notes** — write down what the user dictates, draft notes they ask
    you to compose, and proactively offer to note things worth keeping that
    surface while working ([Capturing notes](#capturing-notes)).
 
 ### Not yet wired into this skill
 
-The `sab` CLI does more than the three workflows above — the daily briefing
-(`sab briefing`) and standalone task management (`sab task add` / `move` /
-`done` and the list views). This skill does **not** yet provide guided workflows
-for those, so don't quietly improvise one or imply it's a finished skill
-feature. When the user asks for one of these areas, be honest and helpful in the
-same breath:
+The `sab` CLI does more than the four workflows above — standalone task
+management (`sab task add` / `move` / `done` and the list views as a
+stand-alone activity, separate from reading them inside the briefing). This skill
+does **not** yet provide guided workflows for those, so don't quietly improvise
+one or imply it's a finished skill feature. When the user asks for one of these
+areas, be honest and helpful in the same breath:
 
-1. Say plainly that this increment of the skill covers context resolution,
-   commit-linking, and note capture, and that the briefing and standalone task
-   management are planned but not wired in yet.
+1. Say plainly that this increment of the skill covers context resolution, the
+   briefing, commit-linking, and note capture, and that standalone task
+   management is planned but not wired in yet.
 2. Because the underlying CLI already works, offer to run the relevant `sab`
    command directly — e.g. `sab briefing --context "$SLUG"`,
    `sab task add "<title>" --context "$SLUG"` — and run it if they say yes.
@@ -157,6 +165,102 @@ This makes each operation correct no matter what another session did to the
 global. Commands that act on a task **by ID** — `sab task view <id>`,
 `sab task move/done/block <id>` — are unambiguous and take no `--context`; that's
 fine, leave it off.
+
+## Running the briefing
+
+The briefing is the front door of the whole system — it's where the user finds
+out what's moving, what's stuck, and what to pick up next. `sab briefing` is
+**read-only and must stay that way**: it never modifies data, and neither does
+running it. Its value is the at-a-glance picture, so most of the time the right
+move is simply to run it correctly-scoped and let the user read it.
+
+What makes the briefing worth a guided workflow rather than a bare command is
+what it *surfaces*: a stale task, a commit that advanced nothing tracked, a
+branch untouched for weeks. Each of those is a doorway into a capability this
+skill already has — note capture, commit-linking, a task move. So treat the
+briefing as a **hub**: present it, then offer the one or two follow-ups it
+obviously calls for. The instinct to aim for is a chief-of-staff who hands you
+the brief and flags the thing that's on fire — not one who makes you adjudicate
+every line.
+
+### Step 1 — scope it right
+
+The briefing has two scopes, and picking the wrong one gives the user a
+misleading picture:
+
+- **Scoped to a context** (`sab briefing --context "$SLUG"`) — the default when
+  the user is working in a repo or asks something repo-flavored ("what should I
+  work on here," "where am I on this"). Resolve context first (run the resolver
+  if you haven't this session), then pass the resolved `--context "$SLUG"` so the
+  briefing reflects *this* repo's work regardless of what another session did to
+  the shared global (see
+  [Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global)).
+  For an **unmapped** repo there's no slug — run plain `sab briefing` against the
+  active context and say which context that was.
+
+- **Across everything** (`sab briefing --all`) — the right call for a true
+  morning/standup view: "what's going on everywhere," "give me the briefing,"
+  "catch me up." This ignores context scope and walks every repo, so reach for it
+  when the user wants the whole board rather than one lane.
+
+There's also `sab briefing --weekly` (a 7-day shipped/stalled/repo-activity
+report) — use it for "how did this week go," "what shipped this week," a weekly
+review. One sharp edge: the weekly briefing is **single-context** — it reports
+only one context, and `--weekly --all` silently ignores `--all` rather than
+spanning everything. So for a weekly review across the board, don't trust a lone
+`--weekly --all`; run `sab briefing --weekly --context <slug>` once per context
+that actually holds work (the contexts with active tasks/recent commits — a quick
+`sab context list` shows which) and stitch the picture together.
+
+### Step 2 — read it back, don't just dump it
+
+The raw output is several sections of dense text. Don't paste it and stop, and
+don't ceremonially narrate all seven sections either. Read it and tell the user
+what actually matters right now: what's active, the one or two things that need
+attention, and — if they asked "what should I work on" — a concrete pick from
+Active Tasks (factoring priority/energy), not a restatement of the list.
+
+If the briefing prints **warnings** (e.g. repos skipped for a basename
+collision, like two `prosepad` folders), those mean real repos are invisible to
+Saboteur — worth surfacing once so the user can rename/disambiguate, but say it
+in a line and don't repeat it every run.
+
+### Step 3 — offer the follow-ups it surfaces
+
+This is the hub part. After reading the briefing, the sections below each point
+at an action already in this skill. Offer the ones that clearly apply, the same
+calibrated way notes work — a light line, the user's call, never an action taken
+silently or a march through every item:
+
+- **Stale Tasks** (Section 4 — tasks that have sat untouched) are the strongest
+  signal. A stale task is usually either done-but-not-marked, genuinely blocked,
+  or something to consciously drop. Offer to move it (`done`/`block`/back to
+  `backlog`) or to capture a note on *why* it stalled. Don't force a verdict —
+  surfacing it is most of the value.
+- **Blocked Tasks** — ask whether the blocker still holds; if it's cleared, offer
+  to move the task out of `blocked`.
+- **In Review** — if review's done, offer to mark it `done`.
+- **Repo State commits** — the briefing shows recent commits with the task they
+  linked to (a `→ task-name` arrow). A commit with no arrow that clearly advanced
+  tracked work is a missed link; point it out and offer to handle it next commit
+  (see [Linking commits to tasks](#linking-commits-to-tasks)). Note that on a
+  *past* commit the link can't be added retroactively here — so this is mostly a
+  heads-up plus a reminder for the next one.
+- **Stale Branches** — a branch untouched for weeks is a decision waiting to
+  happen (resume? abandon? merge?). Worth offering a note capturing the call.
+- **Inbox** — unsorted tasks/notes; if the count is climbing, offer to help
+  triage. Don't make this a chore every single briefing.
+
+When you point at a task in any of these offers, name it by its **exact full ID**
+from the briefing (`task_xxxxxxxx`), not just its title — the user's yes turns
+straight into a move, and a by-name reference forces a second round-trip to
+figure out which task you meant. Moves then act on a task **by ID**, so they take
+no `--context` — `sab task move <id> <state>`, `sab task done <id>`,
+`sab task block <id>` are unambiguous (see
+[Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global)).
+Standalone task *creation/listing* outside the briefing flow is still a later
+increment (see [Not yet wired into this skill](#not-yet-wired-into-this-skill));
+when the user wants that, be honest and offer the raw command.
 
 ## Linking commits to tasks
 

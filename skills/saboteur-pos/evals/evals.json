@@ -1,9 +1,10 @@
 {
   "skill_name": "saboteur-pos",
-  "note": "Iteration 1 evals for the note-capture increment. Baseline = old-skill-snapshot (notes under 'not yet wired').",
+  "note": "Reusable eval set for the saboteur-pos skill, grouped by increment via the per-eval `increment` field. Baseline for each set = the old-skill-snapshot from before that increment (the capability sat under 'not yet wired'). Note evals (0-3) cover note capture; briefing evals (4-7) cover the briefing-as-action-hub. Some briefing evals set `cwd` because context resolution depends on the working repo.",
   "evals": [
     {
       "id": 0,
+      "increment": "notes",
       "name": "verbatim-note",
       "prompt": "take a note: the staging DB wipes every night at 2am, so don't trust any data older than that when I'm debugging the importer",
       "expected_output": "Writes the note verbatim via `sab note new ... --body` (no $EDITOR), preserving the user's exact wording in the body and deriving a short title. No premature back-and-forth asking for content it already has.",
@@ -17,6 +18,7 @@
     },
     {
       "id": 1,
+      "increment": "notes",
       "name": "derived-show-first",
       "prompt": "ok that login bug finally makes sense. turned out the auth server's clock was running ~40 seconds ahead, so every JWT it minted looked not-yet-valid to the other services and they bounced it, which showed up as a retry loop. fixed it by turning NTP back on. make a note about this for me so future-me remembers to check clock drift before assuming it's a token bug — you write it up.",
       "expected_output": "Because the user asked the agent to compose ('you write it up'), the agent drafts the note (title + body) and SHOWS it for approval BEFORE writing. It does not call `sab note new` until approved. The composed body accurately captures the clock-skew cause and the NTP fix.",
@@ -30,6 +32,7 @@
     },
     {
       "id": 2,
+      "increment": "notes",
       "name": "proactive-offer",
       "prompt": "Before I extend this, does the parse step look ok? I'm about to add retry logic on top of it.\n\n```python\ndef load_rows(path):\n    try:\n        with open(path) as f:\n            return [parse(line) for line in f]\n    except Exception:\n        return []\n```",
       "expected_output": "The agent reviews the code, notices the bare `except Exception: return []` silently swallows all errors (a landmine, especially before adding retry logic), and PROACTIVELY OFFERS to capture a note about it in a light one-liner. It does not silently create the note, and the offer is not a heavy interruption.",
@@ -43,6 +46,7 @@
     },
     {
       "id": 3,
+      "increment": "notes",
       "name": "task-link",
       "prompt": "take a note: tiptap table insertion still drops the header row when you paste in a multi-row table from Google Docs",
       "expected_output": "Writes the verbatim note, then notices a clearly-related task on the list (add-tiptap-table-functionality, task_7971678f) and OFFERS to link the note to it, asking before adding `--task`. Uses the exact full task id.",
@@ -52,6 +56,62 @@
         {"text": "Identifies the related task (add-tiptap-table-functionality) and offers to link the note to it"},
         {"text": "Asks for confirmation before adding `--task` (does not link silently)"},
         {"text": "When referencing/linking the task, uses the exact full id task_7971678f (not abbreviated)"}
+      ]
+    },
+    {
+      "id": 4,
+      "increment": "briefing",
+      "name": "morning-briefing-all",
+      "prompt": "morning! catch me up on everything thats going on across all my projects before I dig in",
+      "expected_output": "Runs `sab briefing --all` (cross-repo scope, since the user wants the whole board, not one repo). Does NOT just paste the raw output — reads it back, surfacing what actually matters (active work, anything needing attention) in a digest. If the briefing prints collision/skip warnings, mentions them once. Does not modify any data.",
+      "files": [],
+      "assertions": [
+        {"text": "Runs the briefing across all repos with `sab briefing --all` (not context-scoped)"},
+        {"text": "Summarizes/reads back the briefing rather than dumping the raw multi-section output verbatim"},
+        {"text": "Does not run any state-changing sab command (briefing stays read-only)"}
+      ]
+    },
+    {
+      "id": 5,
+      "increment": "briefing",
+      "name": "what-should-i-work-on-scoped",
+      "prompt": "ive got a focused hour before my next meeting. whats the best thing to pick up right now?",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Resolves the current repo (getwrite) to its context (getwrite-development) and scopes to it — `sab briefing --context getwrite-development` (or a context-scoped task list), passing --context explicitly rather than trusting the global. Gives a CONCRETE recommendation from the active tasks, factoring priority/energy for a focused hour, not a restatement of the whole list.",
+      "files": [],
+      "assertions": [
+        {"text": "Resolves the getwrite repo to the getwrite-development context (runs the resolver / uses the right context)"},
+        {"text": "Scopes the read to that context explicitly with `--context getwrite-development` (does not rely on the bare global active context)"},
+        {"text": "Gives a concrete pick (names a specific task to work on) rather than only listing tasks"},
+        {"text": "Does not run any state-changing sab command"}
+      ]
+    },
+    {
+      "id": 6,
+      "increment": "briefing",
+      "name": "weekly-review",
+      "prompt": "its friday — how did this week actually go? what did I ship and what stalled?",
+      "expected_output": "Recognizes this as the weekly review and runs `sab briefing --weekly` (the 7-day shipped/stalled/repo-activity report), not the daily briefing. Reads the result back framed around what shipped vs what stalled. (Note: the weekly briefing is single-context; for a board-wide picture it should run --weekly per active context rather than trusting --weekly --all.)",
+      "files": [],
+      "assertions": [
+        {"text": "Runs the weekly briefing with `sab briefing --weekly` (not the plain daily briefing)"},
+        {"text": "Frames the answer around shipped vs stalled rather than dumping raw output"},
+        {"text": "Does not run any state-changing sab command"}
+      ]
+    },
+    {
+      "id": 7,
+      "increment": "briefing",
+      "name": "briefing-then-offer-followups",
+      "prompt": "run my briefing and help me tidy up anything thats gone stale or is just sitting there stuck",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Resolves context, runs the (context-scoped) briefing, and then OFFERS follow-ups for what it actually surfaces — routing into existing capabilities (offer a task move by id for stale/blocked/in-review items; offer a note for a stale branch decision; offer to triage inbox). Crucially: it reads the REAL output and does not fabricate stale/blocked tasks that aren't there — if those sections are empty it says so and pivots to what IS present (e.g. stale branches, inbox). It OFFERS rather than silently executing any move/done/block.",
+      "files": [],
+      "assertions": [
+        {"text": "Runs the briefing scoped to getwrite-development before proposing any cleanup"},
+        {"text": "Bases its cleanup suggestions on what the briefing actually shows (does not invent stale/blocked tasks that are not in the output)"},
+        {"text": "Offers follow-up actions (task move / note / triage) rather than silently executing them — no state change without user confirmation"},
+        {"text": "When proposing a task state change, references the task by its exact id"}
       ]
     }
   ]
