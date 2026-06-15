@@ -19,6 +19,11 @@ remote, we fall back to its absolute root path.
 Commands:
   resolve   (default)  Look up the current repo and switch context to its
                        mapping, then show it. If unmapped, report and suggest.
+  slug                 Print just the mapped context slug for the current repo to
+                       stdout (nothing + nonzero exit if unmapped). Designed for
+                       capture in a shell var, e.g. SLUG=$(resolve_context.py slug),
+                       so callers can pass --context <slug> on every command
+                       instead of trusting the shared global active context.
   key                  Print the identity key + repo name for the current repo.
   add <slug>           Map the current repo -> <slug>, then resolve.
   list                 Print the whole context map.
@@ -161,6 +166,20 @@ def cmd_add(slug):
     cmd_resolve()
 
 
+def cmd_slug():
+    """Print the current repo's mapped context slug to stdout, or exit nonzero.
+
+    Pure lookup: reads the map file + git only, never touches sab, never writes.
+    Quiet by design so the slug can be captured into a shell variable and passed
+    as --context on subsequent commands.
+    """
+    key, name, _ = repo_identity()
+    slug = load_map().get("mappings", {}).get(key)
+    if not slug:
+        die(f"repo '{name}' is not mapped to a context")
+    print(slug)
+
+
 def cmd_resolve():
     ensure_sab()
     key, name, kind = repo_identity()
@@ -195,6 +214,8 @@ def main():
     cmd = args[0] if args else "resolve"
     if cmd == "resolve":
         cmd_resolve()
+    elif cmd == "slug":
+        cmd_slug()
     elif cmd == "key":
         cmd_key()
     elif cmd == "list":
@@ -204,7 +225,7 @@ def main():
             die("usage: resolve_context.py add <slug>")
         cmd_add(args[1])
     else:
-        die(f"unknown command: {cmd}\nusage: resolve_context.py [resolve|key|add <slug>|list]")
+        die(f"unknown command: {cmd}\nusage: resolve_context.py [resolve|slug|key|add <slug>|list]")
 
 
 if __name__ == "__main__":

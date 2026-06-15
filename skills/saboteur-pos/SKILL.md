@@ -61,8 +61,11 @@ same breath:
    commit-linking, and note capture, and that the briefing and standalone task
    management are planned but not wired in yet.
 2. Because the underlying CLI already works, offer to run the relevant `sab`
-   command directly — e.g. `sab briefing`, `sab task add "<title>"` — and run it
-   if they say yes.
+   command directly — e.g. `sab briefing --context "$SLUG"`,
+   `sab task add "<title>" --context "$SLUG"` — and run it if they say yes.
+   Pass the resolved `--context "$SLUG"` (see
+   [Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global));
+   omit it only for an unmapped repo, where the active context is the fallback.
 
 (Resolving context first still applies, since these commands are context-scoped.)
 These helpers will land as later increments and will assume context is already
@@ -118,6 +121,43 @@ A repo-key is a normalized remote like `github.com/saboteur-works/getwrite`, or
 an absolute path for repos without a remote. Edit by hand if needed, but `add`
 is the safe path (it validates the slug against existing contexts).
 
+## Pass `--context <slug>` explicitly — don't trust the global
+
+The active context is a **single global value** in `saboteur.config.json`, shared
+by every `sab` process on the machine. The resolver sets it as a sane default,
+but anything can move it out from under you between commands — a second Claude
+session working a different repo, a stray `sab` in another terminal, a scheduled
+job. If you depend on the persisted active context, a concurrent session can
+silently redirect your reads and writes into the wrong context. That's exactly
+the failure this skill exists to prevent (a commit linked under the wrong
+context, a note misfiled), just harder to notice because nothing errors.
+
+So for a **mapped** repo, capture the slug once and pass it on every scoped
+command rather than relying on the switch persisting:
+
+```bash
+SLUG=$(python3 "$CLAUDE_SKILL_DIR/scripts/resolve_context.py" slug)
+```
+
+`slug` prints just the context slug for the current repo and exits 0. If the repo
+is **unmapped** it prints nothing and exits non-zero — there's no slug to pass,
+so fall back to the active context (notes already handle this; see
+[Capturing notes](#capturing-notes)) and offer to add a mapping.
+
+Then thread `--context "$SLUG"` through every context-scoped call:
+
+```bash
+sab task list --context "$SLUG"
+sab task add "<title>" --context "$SLUG"
+sab note new "<title>" --body "<text>" --context "$SLUG"
+sab briefing --context "$SLUG"
+```
+
+This makes each operation correct no matter what another session did to the
+global. Commands that act on a task **by ID** — `sab task view <id>`,
+`sab task move/done/block <id>` — are unambiguous and take no `--context`; that's
+fine, leave it off.
+
 ## Linking commits to tasks
 
 Saboteur links a commit to a task by **putting the task's full ID in square
@@ -137,11 +177,17 @@ before finalizing the message and check whether this commit belongs to a task.
 session, run the resolver (above) first, so `sab task list` is scoped to the
 work at hand rather than some unrelated context.
 
-**Step 2 — read the task list.**
+**Step 2 — read the task list, scoped to this repo's context.**
 
 ```bash
-sab task list
+sab task list --context "$SLUG"
 ```
+
+(Pass the resolved `--context "$SLUG"` so the list reflects *this* repo's work
+even if another session has moved the global active context — see
+[Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global).
+For an unmapped repo there's no slug; use plain `sab task list` against the
+active context.)
 
 **Step 3 — act on what you see. There are exactly three cases:**
 
@@ -182,8 +228,14 @@ decisions, gotchas, stray insights. Write one non-interactively with `--body` �
 you're composing or relaying the text, so there's no reason to open `$EDITOR`:
 
 ```bash
-sab note new "<concise title>" --body "<body text>"
+sab note new "<concise title>" --body "<body text>" --context "$SLUG"
 ```
+
+For a **mapped** repo, pass the resolved `--context "$SLUG"` so the note is filed
+into this repo's context regardless of the shared global (see
+[Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global)).
+For an **unmapped** repo there's no slug — omit `--context` and let it land in the
+active context, exactly as described below.
 
 The `.md` file is the source of truth and the title becomes its filename slug,
 so keep titles short and specific (a few words), not a whole sentence.
@@ -285,7 +337,7 @@ write.
 A note can carry a task link in its frontmatter, set at creation time:
 
 ```bash
-sab note new "<title>" --body "<text>" --task <task_id>
+sab note new "<title>" --body "<text>" --task <task_id> --context "$SLUG"
 ```
 
 This is worth doing whenever a note plainly belongs to tracked work — it's how
@@ -316,5 +368,13 @@ the capture shouldn't wait on the link.
   every Claude launch in a mapped repo (settings.json), independent of model
   triggering.
 - New `sab` capabilities (tasks, notes, briefing) should be added as sibling
-  scripts/sections here, and should assume context has already been resolved.
+  scripts/sections here. They should assume context has been resolved **and**
+  pass `--context "$SLUG"` explicitly (the resolver's `slug` subcommand emits it)
+  rather than relying on the shared global active context, which a concurrent
+  session can change between commands.
+- A SessionStart hook can run `resolve_context.py` to set a sane default context
+  per repo, but it is only a convenience: it does **not** make concurrent
+  multi-repo work safe, because all sessions share one global active context.
+  The `--context "$SLUG"` convention above is what actually keeps each operation
+  in the right context; the hook does not replace it.
 - Requires `sab` on PATH (`npm link` in the saboteur-pos repo) and `python3`.
