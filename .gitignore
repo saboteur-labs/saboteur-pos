@@ -8,3 +8,5 @@ saboteur.secrets.json
 .DS_Store
 .claude/settings.local.json
 skills/saboteur-pos/context-map.json
+__pycache__/
+*.pyc
