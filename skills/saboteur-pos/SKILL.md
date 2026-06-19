@@ -140,6 +140,41 @@ A repo-key is a normalized remote like `github.com/saboteur-works/getwrite`, or
 an absolute path for repos without a remote. Edit by hand if needed, but `add`
 is the safe path (it validates the slug against existing contexts).
 
+### Monorepo sub-contexts
+
+A mapping value is normally a bare slug string — the whole repo resolves to one
+context. For a **monorepo** that holds several operating contexts in one git
+repo, the value may instead be an object that resolves by sub-path:
+
+```json
+{
+  "github.com/acme/platform": {
+    "default": "platform-misc",
+    "paths": [
+      { "glob": "apps/web/**", "context": "platform-web" },
+      { "glob": "apps/api/**", "context": "platform-api" },
+      { "glob": "infra/**",    "context": "platform-infra" }
+    ]
+  }
+}
+```
+
+The resolver matches the current directory's path *relative to the repo root*
+against each `glob` **in order — first match wins** (so list specific rules
+before broad ones), falling back to `default` (or unmapped if there's no
+`default`). So `cd`-ing into `apps/web` resolves to `platform-web`, while the
+repo root falls to `platform-misc`. Globs support `*` (within a path segment),
+`**` (spans segments), and `?`. Add a path rule with:
+
+```bash
+python3 "$CLAUDE_SKILL_DIR/scripts/resolve_context.py" add <slug> --path "<glob>"
+```
+
+which lifts a bare-string mapping into object form and bumps the file to
+`version: 2`. Bare-string mappings keep working unchanged. Note this governs
+**interactive** resolution only — commit attribution still keys by repo, so a
+commit under `apps/web` links by the repo, not the sub-context.
+
 ## Pass `--context <slug>` explicitly — don't trust the global
 
 The active context is a **single global value** in `saboteur.config.json`, shared
