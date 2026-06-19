@@ -1,6 +1,6 @@
 {
   "skill_name": "saboteur-pos",
-  "note": "Reusable eval set for the saboteur-pos skill, grouped by increment via the per-eval `increment` field. Baseline for each set = the old-skill-snapshot from before that increment (the capability sat under 'not yet wired'). Note evals (0-3) cover note capture; briefing evals (4-7) cover the briefing-as-action-hub. Some briefing evals set `cwd` because context resolution depends on the working repo.",
+  "note": "Reusable eval set for the saboteur-pos skill, grouped by increment via the per-eval `increment` field. Baseline for each set = the old-skill-snapshot from before that increment (the capability sat under 'not yet wired'). Note evals (0-3) cover note capture; briefing evals (4-7) cover the briefing-as-action-hub; task evals (8-11) cover standalone task management (create, state machine, dependencies, view selection). Some evals set `cwd` because context resolution depends on the working repo. Task evals are run in no-mutate mode (the runner is told to form the exact sab command and stop short of executing any task/note write) so they never touch live data; grading is from the command the agent produces plus its offer behavior.",
   "evals": [
     {
       "id": 0,
@@ -112,6 +112,67 @@
         {"text": "Bases its cleanup suggestions on what the briefing actually shows (does not invent stale/blocked tasks that are not in the output)"},
         {"text": "Offers follow-up actions (task move / note / triage) rather than silently executing them — no state change without user confirmation"},
         {"text": "When proposing a task state change, references the task by its exact id"}
+      ]
+    },
+    {
+      "id": 8,
+      "increment": "tasks",
+      "name": "add-task-scoped",
+      "prompt": "add a task: pasting a multi-row table from google docs into the editor drops the header row. its fiddly frontend stuff thatll need real focus to get right",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Resolves the getwrite repo to getwrite-development, then forms `sab task add \"<concise title>\" --context getwrite-development` with `--energy deep` inferred from 'real focus / fiddly'. Title is a short slug-ish phrase, NOT the user's whole sentence. Non-interactive (never opens $EDITOR for add). Passes --context explicitly rather than trusting the global.",
+      "files": [],
+      "assertions": [
+        {"text": "Forms a `sab task add` command (not an editor-based or interactive creation)"},
+        {"text": "Scopes the add with `--context getwrite-development` explicitly (resolves the repo to its context first)"},
+        {"text": "Derives a concise title (a few words / slug), not the user's full sentence pasted as the title"},
+        {"text": "Infers `--energy deep` from the 'fiddly / needs real focus' cue"},
+        {"text": "Does not open $EDITOR for the add"}
+      ]
+    },
+    {
+      "id": 9,
+      "increment": "tasks",
+      "name": "state-machine-active-to-done",
+      "prompt": "i just wrapped up finish-getwrite-v1 — mark it done",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "finish-getwrite-v1 (task_4bf73ace) is currently in the 'active' state. The skill knows active -> done is NOT a legal transition (done is only reachable from review), so it does NOT blindly run `sab task done`. It explains the task must pass through review first and offers the two-step active -> review -> done (e.g. `sab task move task_4bf73ace review` then `sab task done task_4bf73ace`), referencing the exact id, by-id with no --context.",
+      "files": [],
+      "assertions": [
+        {"text": "Recognizes that finish-getwrite-v1 is active and that active -> done is an illegal transition (must pass through review)"},
+        {"text": "Does NOT propose a bare `sab task done` as if it would succeed from active"},
+        {"text": "Offers the correct path: move to review first, then done (active -> review -> done)"},
+        {"text": "References the task by its exact id task_4bf73ace and uses by-id commands with no --context"}
+      ]
+    },
+    {
+      "id": 10,
+      "increment": "tasks",
+      "name": "dependency-link-direction",
+      "prompt": "the tiptap table functionality work cant really start until the latex integration is finished. can you record that dependency between them?",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "table = add-tiptap-table-functionality (task_7971678f), latex = finish-tiptap-latex-integration (task_b5400c26). 'table can't start until latex is finished' means latex BLOCKS table, so the correct command is `sab task link task_b5400c26 --blocks task_7971678f` (blocker first). Gets the direction right, uses exact ids, and offers/confirms before running (it's a write) — ideally restating the relationship in plain words.",
+      "files": [],
+      "assertions": [
+        {"text": "Uses `sab task link ... --blocks ...` with the correct direction: latex (task_b5400c26) blocks table (task_7971678f)"},
+        {"text": "Uses the exact full task ids (task_b5400c26 and task_7971678f), not titles or abbreviations"},
+        {"text": "Offers/confirms before recording the dependency rather than silently writing it"},
+        {"text": "Does not add --context to the by-id link command"}
+      ]
+    },
+    {
+      "id": 11,
+      "increment": "tasks",
+      "name": "view-selection-deep-work",
+      "prompt": "ive got a solid uninterrupted block and im sharp right now. whats the best thing on my plate here to sink into?",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Recognizes this as a deep-focus question and lists the deep-work view scoped to getwrite-development — `sab task list --view deep-work --context getwrite-development` (active + energy=deep + unblocked) — rather than dumping the whole list or a generic `today`. Resolves context first and passes --context explicitly. Gives a concrete pick, not a restatement.",
+      "files": [],
+      "assertions": [
+        {"text": "Chooses the `deep-work` view (recognizing the deep-focus framing) rather than a bare list or generic today view"},
+        {"text": "Scopes the read to getwrite-development with --context explicitly (resolves the repo to its context first)"},
+        {"text": "Makes a concrete recommendation of what to work on rather than only restating the list"},
+        {"text": "Does not run any state-changing sab command (read-only)"}
       ]
     }
   ]

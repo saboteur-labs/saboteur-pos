@@ -2,7 +2,7 @@
 name: saboteur-pos
 description: >-
   Drive Saboteur POS (the `sab` CLI) for personal tasks, notes, and a daily
-  briefing. Four capabilities are actively guided: (1) putting you in the RIGHT
+  briefing. Five capabilities are actively guided: (1) putting you in the RIGHT
   context — every `sab` action is context-scoped, so it maps the current git
   repository to its Saboteur context and switches to it; (2) running the daily
   briefing as an action hub — it scopes the briefing to the right context (or
@@ -14,12 +14,18 @@ description: >-
   verbatim and confirm it back before saving) or "make a note" (draft it and show
   them first), AND proactively offering to note bugs, landmines, follow-up work,
   decisions, or insights that surface while working, linking a note to a task
-  when it's relevant. For standalone task add/move/done it reports those aren't
-  wired in yet and offers to run the raw `sab` command. Use this skill whenever
-  you start working in a repository, are about to commit, want a briefing or to
-  know what to work on, want to jot/save/capture/record a note, thought, or
-  insight, or whenever the user mentions sab, saboteur, their tasks, notes,
-  briefing, backlog, standup, or "what should I work on" — even if they don't
+  when it's relevant; and (5) managing tasks — creating them in the right
+  context with sensible priority/energy, listing the view that answers the
+  question asked, moving them through the state machine (it knows the legal
+  transitions, e.g. that a task must pass through review before it can be done),
+  and recording blocking dependencies, always offering before a state change
+  rather than acting silently. Use this skill whenever you start working in a
+  repository, are about to commit, want a briefing or to know what to work on,
+  want to jot/save/capture/record a note, thought, or insight, want to add or
+  create a task, move a task or mark it done/blocked/in review, see your backlog
+  or what's active/blocked/stale, record a dependency between tasks, or whenever
+  the user mentions sab, saboteur, their tasks, notes, briefing, backlog,
+  standup, or "what should I work on" — even if they don't
   name the tool. This is the local Saboteur `sab` CLI — not Jira, Trello,
   Obsidian, or a repo's GitHub issues; don't engage for those. Also invoke it
   directly to switch or check context.
@@ -40,7 +46,7 @@ deterministically with a script.
 
 ## Current scope
 
-Four capabilities, all built on the same foundation — knowing which context the
+Five capabilities, all built on the same foundation — knowing which context the
 current repo belongs to:
 
 1. **Resolve the current repository to its context and switch to it** (below).
@@ -55,23 +61,28 @@ current repo belongs to:
 4. **Capture notes** — write down what the user dictates, draft notes they ask
    you to compose, and proactively offer to note things worth keeping that
    surface while working ([Capturing notes](#capturing-notes)).
+5. **Manage tasks** — create them in the right context, list the view that
+   answers the question, move them through the state machine, and record
+   blocking dependencies ([Managing tasks](#managing-tasks)).
 
 ### Not yet wired into this skill
 
-The `sab` CLI does more than the four workflows above — standalone task
-management (`sab task add` / `move` / `done` and the list views as a
-stand-alone activity, separate from reading them inside the briefing). This skill
-does **not** yet provide guided workflows for those, so don't quietly improvise
-one or imply it's a finished skill feature. When the user asks for one of these
-areas, be honest and helpful in the same breath:
+The `sab` CLI does more than the five workflows above. The parts this skill does
+**not** yet give a guided workflow for are: **retrieving** notes
+(`sab note list` / `view` / `find --tag` / `edit` — capture is covered, search
+and reading back aren't), **context administration** (`sab context new` /
+`delete` / `repos`), and the read-only **dashboard** (`sab ui`), plus `sab sync`
+and `sab git`. Don't quietly improvise a polished workflow for those or imply
+it's a finished skill feature. When the user asks for one, be honest and helpful
+in the same breath:
 
-1. Say plainly that this increment of the skill covers context resolution, the
-   briefing, commit-linking, and note capture, and that standalone task
-   management is planned but not wired in yet.
+1. Say plainly that this part isn't wired into the skill yet (the skill covers
+   context resolution, the briefing, commit-linking, note capture, and task
+   management).
 2. Because the underlying CLI already works, offer to run the relevant `sab`
-   command directly — e.g. `sab briefing --context "$SLUG"`,
-   `sab task add "<title>" --context "$SLUG"` — and run it if they say yes.
-   Pass the resolved `--context "$SLUG"` (see
+   command directly — e.g. `sab note list --context "$SLUG"`,
+   `sab context new "<slug>"` — and run it if they say yes. Pass the resolved
+   `--context "$SLUG"` on context-scoped reads (see
    [Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global));
    omit it only for an unmapped repo, where the active context is the fallback.
 
@@ -258,9 +269,150 @@ figure out which task you meant. Moves then act on a task **by ID**, so they tak
 no `--context` — `sab task move <id> <state>`, `sab task done <id>`,
 `sab task block <id>` are unambiguous (see
 [Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global)).
-Standalone task *creation/listing* outside the briefing flow is still a later
-increment (see [Not yet wired into this skill](#not-yet-wired-into-this-skill));
-when the user wants that, be honest and offer the raw command.
+The full mechanics of those moves — including which transitions are legal — live
+in [Managing tasks](#managing-tasks); the briefing is just one place they get
+offered.
+
+## Managing tasks
+
+The task list is the spine of the system: it's what the briefing reads, what
+commits link to, and what the user means by "what should I work on." This skill
+drives the whole task lifecycle — create, list, move, depend, edit, delete —
+through the `sab task` verbs. Two facts make this more than typing raw commands,
+and most mistakes trace back to one of them:
+
+- **The context split.** `sab task add` and `sab task list` are context-scoped,
+  so they take `--context "$SLUG"` (resolve context first; see
+  [Pass `--context <slug>` explicitly](#pass---context-slug-explicitly--dont-trust-the-global)).
+  Everything that acts on a task **by ID** — `view`, `move`, `done`, `block`,
+  `edit`, `link`, `delete` — is unambiguous and takes **no** `--context`. Mixing
+  this up either misfiles a new task or makes a by-ID command look like it needs
+  scoping when it doesn't.
+- **The state machine is real and rejects illegal moves** (see
+  [Moving tasks through states](#moving-tasks-through-states)). Proposing a move
+  the machine forbids — most commonly marking an `active` task `done` — gets a
+  hard error, so know the legal transitions *before* you offer one.
+
+A standing rule for everything in this section: **state changes are the user's
+call.** Creating a task they asked for is a direct action, but moving, blocking,
+editing, deleting, or linking a task changes the record the user steers by — so
+offer and act on a yes, don't do it silently. Always name a task by its **exact
+full ID** (`task_xxxxxxxx`) from the list, never just its title: the user's yes
+turns straight into the command, and a by-name reference forces a second
+round-trip to figure out which task you meant.
+
+### Creating tasks
+
+```bash
+sab task add "<concise title>" --context "$SLUG" --priority high --energy deep
+```
+
+New tasks land in `backlog`. The title becomes how the task reads everywhere, so
+keep it short and specific (a few words, kebab-ish), not a whole sentence —
+derive it from what the user said rather than pasting their sentence in. `add`
+is non-interactive; never open `$EDITOR` for it.
+
+The optional metadata isn't bookkeeping for its own sake — it's **what makes a
+task findable later**, because the views and the briefing sort and filter on it:
+
+- `--priority critical | high | normal | low` (defaults to `normal`) — drives
+  ordering in the `today` view and the briefing.
+- `--energy deep | shallow | admin` — `deep` is what lands a task in the
+  `deep-work` view; without it the task can't surface there.
+- `--effort xs | s | m | l | xl` — sizing, for the user's own triage.
+
+Set the ones the user's words clearly imply ("fiddly, needs real focus" →
+`--energy deep`; "quick cleanup" → `--energy admin`; "this is the priority" →
+`--priority high`). Don't interrogate the user to fill every field — a task with
+just a good title is fine, and they can refine later.
+
+### Listing tasks — pick the view that answers the question
+
+`sab task list --context "$SLUG"` shows the context's open tasks. The **view** is
+how you answer a specific question instead of dumping everything — match it to
+what the user actually asked:
+
+| Question the user is asking | View |
+| --- | --- |
+| "what should I do now / today" | `--view today` (active, sorted by priority then energy) |
+| "what's a good deep-focus task" | `--view deep-work` (active **and** `energy=deep` **and** unblocked) |
+| "what's in flight" | `--view active` |
+| "what's waiting / not started" | `--view backlog` |
+| "what's stuck" | `--view blocked` |
+| "what's waiting on review" | `--view review` |
+| "what's gone stale" | `--view stale` (active, untouched past the staleness threshold — the same set as briefing Section 4) |
+
+`--all` lists across every context (see the scoping note above). With no `--view`
+you get the context's open tasks, newest-touched first. As with the briefing,
+read the result back — surface the one or two that matter and, when asked what to
+work on, make a concrete pick rather than restating the list.
+
+### Moving tasks through states
+
+A task moves with `sab task move <id> <state>`, with two shorthands:
+`sab task done <id>` (→ `done`) and `sab task block <id>` (→ `blocked`). All act
+by ID, so **no `--context`**. The legal transitions:
+
+```
+backlog  →  active, blocked
+active   →  review, backlog, blocked          (NOT directly to done)
+blocked  →  active                            (re-pick up where it was)
+review   →  done, active, blocked
+done     →  (terminal — nothing moves out of done)
+```
+
+The one that bites: **a task can't go straight from `active` to `done`.** It has
+to pass through `review` first (`active → review → done`). So when the user says
+"mark X done" and X is `active`, don't fire `sab task done` and eat the error —
+say it needs to go through review and offer the two-step
+(`sab task move <id> review`, then `sab task done <id>`) — but offer the move to
+`review` on its own too, and let the user pick. `review` exists for a reason, and
+"I just wrapped this up" often means *ready for a once-over*, not *close it
+now*; defaulting to a forced two-step `done` skips the very beat the state is
+there to provide. `blocked` is reachable from any non-done
+state via `sab task block`. Moving a task to `done` **auto-unblocks** its
+dependents (any task whose only remaining blocker was this one flips from
+`blocked` back to `active`) — worth mentioning when it'll happen, since the user
+may not expect another task to wake up.
+
+### Recording dependencies
+
+When one task can't proceed until another finishes, record it:
+
+```bash
+sab task link <blocker_id> --blocks <dependent_id>
+```
+
+Direction is the whole game and easy to flip: `link A --blocks B` means **A
+blocks B** — A must finish first. So "the table work can't start until the LaTeX
+integration is done" is `link <latex_id> --blocks <table_id>` (LaTeX is the
+blocker). State it back in plain words before running so the user can catch a
+reversal — *"so LaTeX integration blocks the table work — recording that?"* Both
+sides of the relationship are kept in sync automatically, and a link that would
+form a **cycle** is rejected with an error, so don't try to force one. This is a
+write, so offer first.
+
+Don't confuse `link --blocks` with `sab task block` — they sound alike and the
+trap is easy to fall into. `sab task block <id>` only moves a task into the
+`blocked` *state* and records **no relationship** between tasks; `link <blocker>
+--blocks <dependent>` is the one that creates the actual dependency. When the
+user describes one task waiting on another, you want `link --blocks`.
+
+### Editing and deleting
+
+`sab task edit <id>` opens the task's fields in `$EDITOR` — and unlike notes,
+there is **no** `--body`-style non-interactive edit for tasks. So: change a
+task's **state** with `move`/`done`/`block` (non-interactive, what you'll reach
+for most); changing **metadata** (title, priority, energy, effort) means
+`sab task edit`, which needs an editor. If `$EDITOR` isn't set, relay the
+standard message rather than guessing
+(`"No $EDITOR set. Export EDITOR=<your editor> and try again."`).
+
+`sab task delete <id>` removes a task permanently — it doesn't move to `done`,
+it's gone. Treat it as irreversible: confirm before running even if the user
+sounded sure. If the task has dependency links, delete refuses unless you add
+`--force` (which also tears down those links); surface that rather than reflexively
+forcing, since the guard is usually catching something real.
 
 ## Linking commits to tasks
 
