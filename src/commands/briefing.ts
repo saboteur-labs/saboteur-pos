@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../config.js';
 import { getDb } from '../db/index.js';
 import { listTasks, getTask } from '../db/tasks.js';
-import { getContext } from '../db/contexts.js';
+import { getContext, repoNames } from '../db/contexts.js';
 import { incrementalSync } from '../sync.js';
 import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
@@ -237,7 +237,7 @@ interface RepoStateEntry {
   name: string;
   headLabel: string;
   dirty: boolean;
-  commits: Array<{ sha: string; message: string; author_ts: string; task_title: string }>;
+  commits: Array<{ sha: string; message: string; author_ts: string; task_title: string | null }>;
 }
 
 interface StaleBranch {
@@ -280,7 +280,7 @@ function collectRepoState(
   // could be linked, a hint guiding the user to link them. `--all`
   // (bypassScope) ignores the scope entirely and shows every working repo.
   const ctx = getContext(db, activeContext);
-  const scope = ctx?.repos ?? [];
+  const scope = ctx ? repoNames(ctx) : [];
   const showLinkHint = !bypassScope && scope.length === 0 && discovered.length > 0;
   const allowed = new Set(scope);
   const filtered = bypassScope ? discovered : discovered.filter((r) => allowed.has(r.name));
@@ -293,11 +293,16 @@ function collectRepoState(
     return { repos: [], staleBranches: [], skipped: [], showLinkHint, collisions };
   }
 
+  // A commit surfaces under a context two ways: linked to a task in that
+  // context (existing behavior), or — for a monorepo sub-context — path-
+  // attributed to it even with no task link. LEFT JOIN so unlinked rows survive.
   const commitQuery = db.prepare(
     `SELECT c.sha, c.message, c.author_ts, t.title as task_title
        FROM commits c
-       JOIN tasks t ON c.task_id = t.id
-      WHERE c.repo = ? AND t.context_id = ?
+       LEFT JOIN tasks t ON c.task_id = t.id
+      WHERE c.repo = ?
+        AND ( (c.task_id IS NOT NULL AND t.context_id = ?)
+              OR c.sub_context = ? )
       ORDER BY c.author_ts DESC
       LIMIT 5`,
   );
@@ -334,7 +339,11 @@ function collectRepoState(
           name: repo.name,
           headLabel,
           dirty: isDirty(repo.path),
-          commits: commitQuery.all(repo.name, activeContext) as RepoStateEntry['commits'],
+          commits: commitQuery.all(
+            repo.name,
+            activeContext,
+            activeContext,
+          ) as RepoStateEntry['commits'],
         });
       });
     } catch (err) {
@@ -371,9 +380,10 @@ function renderRepoState(
       const short = cm.sha.slice(0, 7);
       const firstLine = cm.message.split('\n')[0];
       const date = cm.author_ts.slice(0, 10);
-      lines.push(
-        `    ${c.muted(short)}  ${firstLine}  ${c.muted(date)}  → ${c.cyan(cm.task_title)}`,
-      );
+      // No arrow for a path-attributed commit with no task link — that absence
+      // is the "missed link" cue the briefing is meant to surface.
+      const link = cm.task_title ? `  → ${c.cyan(cm.task_title)}` : '';
+      lines.push(`    ${c.muted(short)}  ${firstLine}  ${c.muted(date)}${link}`);
     }
   }
 

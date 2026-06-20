@@ -126,6 +126,43 @@ export function listBranches(repoPath: string): string[] {
     .filter((s) => s.length > 0);
 }
 
+/**
+ * Map every commit since `sinceIso` to the list of file paths it changed, in a
+ * single `git log` call per repo (avoids a per-commit `git show`). The format is
+ * just a record-separator + sha so the name-status lines that follow are
+ * unambiguous to parse — no commit body to confuse the boundary. `--first-parent`
+ * keeps merge commits from exploding into their whole side branch (they get an
+ * empty file set, hence no sub-context attribution).
+ */
+export function getChangedFilesByCommit(repoPath: string, sinceIso: string): Map<string, string[]> {
+  const out = gitRunSafe(repoPath, [
+    'log',
+    '--first-parent',
+    '--all',
+    `--since=${sinceIso}`,
+    '--name-status',
+    `--format=${RECORD}%H`,
+  ]);
+  const result = new Map<string, string[]>();
+  if (out === null || out.length === 0) return result;
+
+  for (const block of out.split(RECORD)) {
+    if (block.length === 0) continue;
+    const lines = block.split('\n').filter((l) => l.length > 0);
+    if (lines.length === 0) continue;
+    const sha = lines[0].trim();
+    const files: string[] = [];
+    for (const line of lines.slice(1)) {
+      // `STATUS\tpath` (or `R100\told\tnew` for renames) — take the last field.
+      const parts = line.split('\t');
+      const path = parts[parts.length - 1].trim();
+      if (path.length > 0) files.push(path);
+    }
+    result.set(sha, files);
+  }
+  return result;
+}
+
 export function getBranchLastActivity(repoPath: string, branch: string): string | null {
   const out = gitRunSafe(repoPath, ['log', '-1', '--format=%aI', branch]);
   if (out === null) return null;

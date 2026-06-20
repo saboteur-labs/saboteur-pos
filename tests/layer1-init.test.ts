@@ -48,7 +48,7 @@ describe('Layer 1 — Init + Status', () => {
       .all() as Array<{ name: string; type: string; notnull: number }>;
     const colNames = cols.map((c) => c.name).sort();
     expect(colNames).toEqual(
-      ['author_ts', 'branch', 'message', 'repo', 'sha', 'task_id'].sort(),
+      ['author_ts', 'branch', 'message', 'repo', 'sha', 'sub_context', 'task_id'].sort(),
     );
     const shaCol = cols.find((c) => c.name === 'sha')!;
     expect(shaCol.type.toUpperCase()).toBe('TEXT');

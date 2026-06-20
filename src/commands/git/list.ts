@@ -1,6 +1,6 @@
 import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
-import { getContext } from '../../db/contexts.js';
+import { getContext, repoNames } from '../../db/contexts.js';
 import { collisionWarning, discoverAllRepos } from '../../git/discover.js';
 import { getHeadState } from '../../git/read.js';
 import { c } from '../../colors.js';
@@ -32,7 +32,7 @@ export function runGitList(options: GitListOptions): void {
 
   const working = discovered.filter((r) => r.kind === 'working');
   const skipped = discovered.filter((r) => r.kind !== 'working');
-  const scoped = ctx && ctx.repos.length > 0 ? new Set(ctx.repos) : null;
+  const scoped = ctx && ctx.repos.length > 0 ? new Set(repoNames(ctx)) : null;
 
   if (scoped) {
     process.stdout.write(c.muted(`Active context: ${activeContext}  (* = in context)\n\n`));

@@ -230,6 +230,69 @@ describe('indexCommits', () => {
     ]);
   });
 
+  function seedSubContext(db: Database.Database, id: string, repos: string): void {
+    db.prepare(
+      `INSERT INTO contexts (id, name, repos, created_at)
+       VALUES (?, ?, ?, '2026-01-01T00:00:00Z')`,
+    ).run(id, id, repos);
+  }
+
+  it('path-attributes an unlinked commit to a declared sub-context', () => {
+    seedSubContext(db, 'platform-web', '[{"repo":"platform","paths":["apps/web/**"]}]');
+    const repo = join(root, 'platform');
+    mkdirSync(join(repo, 'apps', 'web'), { recursive: true });
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'apps/web/table.ts', '1', 'fix table parser'); // no task id
+
+    indexCommits(db, configFor(root));
+
+    const rows = db.prepare(`SELECT task_id, sub_context FROM commits`).all() as Array<{
+      task_id: string | null;
+      sub_context: string | null;
+    }>;
+    expect(rows).toEqual([{ task_id: null, sub_context: 'platform-web' }]);
+  });
+
+  it('does not index an unlinked commit that touches no declared sub-area', () => {
+    seedSubContext(db, 'platform-web', '[{"repo":"platform","paths":["apps/web/**"]}]');
+    const repo = join(root, 'platform');
+    mkdirSync(join(repo, 'apps', 'api'), { recursive: true });
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'apps/api/route.ts', '1', 'api work'); // outside apps/web, no task id
+
+    indexCommits(db, configFor(root));
+    expect((db.prepare(`SELECT COUNT(*) as c FROM commits`).get() as { c: number }).c).toBe(0);
+  });
+
+  it('records both the task link and the sub-context when a commit has both', () => {
+    seedTask(db, 'task_a1b2c3d4');
+    seedSubContext(db, 'platform-web', '[{"repo":"platform","paths":["apps/web/**"]}]');
+    const repo = join(root, 'platform');
+    mkdirSync(join(repo, 'apps', 'web'), { recursive: true });
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'apps/web/table.ts', '1', 'fix header [task_a1b2c3d4]');
+
+    indexCommits(db, configFor(root));
+    const row = db.prepare(`SELECT task_id, sub_context FROM commits`).get() as {
+      task_id: string | null;
+      sub_context: string | null;
+    };
+    expect(row).toEqual({ task_id: 'task_a1b2c3d4', sub_context: 'platform-web' });
+  });
+
+  it('leaves sub_context null for a repo with no path rules (non-monorepo unchanged)', () => {
+    seedTask(db, 'task_a1b2c3d4');
+    const repo = join(root, 'demo');
+    mkdirSync(repo);
+    git(repo, 'init -q -b main');
+    makeCommit(repo, 'a.txt', '1', 'work [task_a1b2c3d4]');
+    makeCommit(repo, 'b.txt', '2', 'unlinked work'); // must NOT be indexed
+
+    indexCommits(db, configFor(root));
+    const rows = db.prepare(`SELECT task_id, sub_context FROM commits`).all();
+    expect(rows).toEqual([{ task_id: 'task_a1b2c3d4', sub_context: null }]);
+  });
+
   it('skips a basename that collides across roots (no ambiguous commits.repo)', () => {
     seedTask(db, 'task_a1b2c3d4');
     const a = join(root, 'roots-a');

@@ -1,10 +1,16 @@
 import type Database from 'better-sqlite3';
 
+/** A repo a context owns. A bare string is the whole repo; the object form
+ * restricts it to sub-paths (monorepo sub-context). Both forms coexist in the
+ * `repos` JSON array. */
+export type RepoEntry = { repo: string; paths: string[] };
+export type RawRepoEntry = string | RepoEntry;
+
 export interface Context {
   id: string;
   name: string;
   description: string | null;
-  repos: string[];
+  repos: RawRepoEntry[];
   created_at: string;
 }
 
@@ -18,6 +24,24 @@ interface ContextRow {
 
 function parseContext(row: ContextRow): Context {
   return { ...row, repos: JSON.parse(row.repos) };
+}
+
+/** Normalize the mixed `repos` array into `{ repo, paths }` entries. The single
+ * place the string|object shape is interpreted — every consumer goes through
+ * this (or `repoNames`). */
+export function repoEntries(ctx: Context): RepoEntry[] {
+  return ctx.repos.map((e) =>
+    typeof e === 'string' ? { repo: e, paths: [] } : { repo: e.repo, paths: e.paths ?? [] },
+  );
+}
+
+/** Just the repo basenames a context owns (drops any path restrictions). */
+export function repoNames(ctx: Context): string[] {
+  return repoEntries(ctx).map((e) => e.repo);
+}
+
+function entryName(e: RawRepoEntry): string {
+  return typeof e === 'string' ? e : e.repo;
 }
 
 export function getContext(db: Database.Database, id: string): Context | null {
@@ -63,7 +87,7 @@ export function createContext(db: Database.Database, opts: CreateContextOptions)
   return getContext(db, opts.slug)!;
 }
 
-function persistRepos(db: Database.Database, slug: string, repos: string[]): Context {
+function persistRepos(db: Database.Database, slug: string, repos: RawRepoEntry[]): Context {
   db.transaction(() => {
     db.prepare(`UPDATE contexts SET repos = ? WHERE id = ?`).run(JSON.stringify(repos), slug);
   })();
@@ -75,8 +99,12 @@ export function addContextRepos(db: Database.Database, slug: string, repos: stri
   if (!ctx) throw new Error(`Context '${slug}' does not exist.`);
 
   const merged = [...ctx.repos];
+  const have = new Set(merged.map(entryName));
   for (const repo of repos) {
-    if (!merged.includes(repo)) merged.push(repo);
+    if (!have.has(repo)) {
+      merged.push(repo);
+      have.add(repo);
+    }
   }
   return persistRepos(db, slug, merged);
 }
@@ -86,8 +114,34 @@ export function removeContextRepos(db: Database.Database, slug: string, repos: s
   if (!ctx) throw new Error(`Context '${slug}' does not exist.`);
 
   const toRemove = new Set(repos);
-  const filtered = ctx.repos.filter((repo) => !toRemove.has(repo));
+  const filtered = ctx.repos.filter((e) => !toRemove.has(entryName(e)));
   return persistRepos(db, slug, filtered);
+}
+
+/** Attach a sub-path glob to a repo entry, lifting a bare-string entry into the
+ * object form. Creates the entry if the repo isn't linked yet. This is what
+ * makes a context a monorepo sub-context. */
+export function addContextRepoPath(
+  db: Database.Database,
+  slug: string,
+  repo: string,
+  glob: string,
+): Context {
+  const ctx = getContext(db, slug);
+  if (!ctx) throw new Error(`Context '${slug}' does not exist.`);
+
+  const entries = [...ctx.repos];
+  const idx = entries.findIndex((e) => entryName(e) === repo);
+  if (idx === -1) {
+    entries.push({ repo, paths: [glob] });
+  } else {
+    const e = entries[idx];
+    const obj: RepoEntry =
+      typeof e === 'string' ? { repo: e, paths: [] } : { repo: e.repo, paths: [...(e.paths ?? [])] };
+    if (!obj.paths.includes(glob)) obj.paths.push(glob);
+    entries[idx] = obj;
+  }
+  return persistRepos(db, slug, entries);
 }
 
 export interface DeleteContextOptions {
