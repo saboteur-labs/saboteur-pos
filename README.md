@@ -67,6 +67,16 @@ sab task move <id> active
 sab task done <id>
 ```
 
+`sab task list --view today` ranks your active tasks by priority then energy:
+
+```console
+$ sab task list --view today
+ID           STATE    PRI   ENERGY   TITLE
+------------------------------------------
+task_1175853b active   high  deep     wire up table toolbar (0d)
+task_5afb60a0 active   norm  deep     split parser module (0d)
+```
+
 ## Contexts
 
 Every task and note belongs to a context. Switch with:
@@ -139,6 +149,19 @@ Paths starting with `~/` are expanded to your home directory. A typical layout:
 └── archive.git/      ← bare repo, listed under "Skipped"
 ```
 
+`sab git list` shows exactly what is picked up (`*` marks repos in the active context's scope):
+
+```console
+$ sab git list
+Active context: inbox  (no repo scope set; all repos visible)
+
+  omoikane   main
+  varsentry  main
+
+Skipped:
+  archive.git  (bare)
+```
+
 To scope which repos appear under a specific context, link them with:
 
 ```bash
@@ -169,6 +192,25 @@ sab context repos add platform-api platform --path 'apps/api/**'
 ```
 
 Now `sab briefing` attributes each commit to the sub-context its changed files fall in (the area with the most matched files wins), and surfaces it under that context's **Repo State** — including commits with **no** task link, shown without the `→ task` arrow. A repo with no `--path` rules behaves exactly as before: only bracket-linked commits are indexed. Globs support `*` (within a path segment), `**` (across segments), and `?`.
+
+```console
+$ sab context repos platform-web
+platform  [apps/web/**]
+
+$ sab briefing --context platform-web
+── Active Context: platform-web (platform-web) ──────────────────
+
+── Active Tasks ──────────────────────────────
+  task_30b4bf67  keep header row on paste
+    high / deep / -  (0d in state)
+
+── Repo State ────────────────────────────────
+  platform  (main)  ✓ clean
+    f4b60ef  refactor(web): tidy table parser  2026-06-19
+    ab48794  fix(web): keep header row on paste [task_30b4bf67]  2026-06-19  → keep header row on paste
+```
+
+Both commits touched `apps/web`, so both appear under `platform-web`. The linked one carries `→ keep header row on paste`; the `refactor` has no arrow — the cue that work landed here without being tracked.
 
 All git reads are local — no network access.
 
