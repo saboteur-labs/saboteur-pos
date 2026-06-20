@@ -110,7 +110,7 @@ Wiki-links in note bodies (`[[note_id]]` or `[[title-slug]]`) resolve at read ti
 
 ## Git integration
 
-Saboteur scans the immediate subdirectories of `repos_dir` for git repos. The daily briefing gains a **Repo State** section listing each repo's branch (or `detached @ <sha>`), a clean/dirty indicator, and recent task-linked commits scoped to the active context. Branches whose latest commit is older than `briefing.stale_branch_days` (default `14`) appear in a **Stale Branches** subsection. Bare repos and repos that fail to read are surfaced in a one-line skipped footer.
+Saboteur scans the immediate subdirectories of `repos_dir` for git repos. The daily briefing gains a **Repo State** section listing each repo's branch (or `detached @ <sha>`), a clean/dirty indicator, and recent commits scoped to the active context — those linked to a task in it (shown with a `→ task` arrow), plus, for a monorepo sub-context, commits whose changed files fall in that sub-area even when unlinked (shown without an arrow). Branches whose latest commit is older than `briefing.stale_branch_days` (default `14`) appear in a **Stale Branches** subsection. Bare repos and repos that fail to read are surfaced in a one-line skipped footer.
 
 ### Setting up `repos_dir`
 

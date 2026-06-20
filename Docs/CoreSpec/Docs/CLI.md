@@ -403,6 +403,31 @@ Delete a context. See LOGIC.md §4 for full deletion behavior.
 
 ---
 
+### `sab context repos <slug>` · `add` · `remove`
+
+Manage the repos a context owns (its `repos` array). The bare command lists them; `add`/`remove` link and unlink. A repo must be discoverable under `repos_dir` (see `sab git list`) to be linked.
+
+```
+sab context repos <slug>                      # list linked repos
+sab context repos add <slug> <repo...>        # link one or more whole repos
+sab context repos add <slug> <repo> --path <glob>   # link a monorepo sub-area
+sab context repos remove <slug> <repo...>     # unlink
+```
+
+**`add` flags:**
+| Flag | Behavior |
+|---|---|
+| `--path <glob>` | Restrict a **single** repo to a sub-path glob, making this context a monorepo **sub-context**. Stores `{ "repo": <repo>, "paths": [<glob>,…] }` and lifts an existing bare-string entry into that form. Repeatable to add more globs. Globs support `*` (within a segment), `**` (across segments), and `?`. |
+
+With `--path`, commits whose changed files fall under `<glob>` are attributed to `<slug>` and surface in its briefing even without a task link (see SCHEMA.md `commits.sub_context`). Without it, the whole repo is linked as before.
+
+**Errors:**
+
+- Repo not under `repos_dir` → `"'<repo>' not found under repos_dir. Run 'sab git list' to see available repos."`
+- `--path` with more than one repo → `"--path takes exactly one repo (got <N>)."`
+
+---
+
 ## System Commands
 
 ### `sab briefing`
