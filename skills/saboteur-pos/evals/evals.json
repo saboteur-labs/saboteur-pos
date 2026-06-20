@@ -1,0 +1,179 @@
+{
+  "skill_name": "saboteur-pos",
+  "note": "Reusable eval set for the saboteur-pos skill, grouped by increment via the per-eval `increment` field. Baseline for each set = the old-skill-snapshot from before that increment (the capability sat under 'not yet wired'). Note evals (0-3) cover note capture; briefing evals (4-7) cover the briefing-as-action-hub; task evals (8-11) cover standalone task management (create, state machine, dependencies, view selection). Some evals set `cwd` because context resolution depends on the working repo. Task evals are run in no-mutate mode (the runner is told to form the exact sab command and stop short of executing any task/note write) so they never touch live data; grading is from the command the agent produces plus its offer behavior.",
+  "evals": [
+    {
+      "id": 0,
+      "increment": "notes",
+      "name": "verbatim-note",
+      "prompt": "take a note: the staging DB wipes every night at 2am, so don't trust any data older than that when I'm debugging the importer",
+      "expected_output": "Writes the note verbatim via `sab note new ... --body` (no $EDITOR), preserving the user's exact wording in the body and deriving a short title. No premature back-and-forth asking for content it already has.",
+      "files": [],
+      "assertions": [
+        {"text": "Creates the note non-interactively with `sab note new` and `--body` (does not open $EDITOR)"},
+        {"text": "The note body preserves the user's wording verbatim (not reworded or summarized)"},
+        {"text": "Derives a concise title (a few words), not the full sentence as the title"},
+        {"text": "Does not stall asking the user for content it was already given"}
+      ]
+    },
+    {
+      "id": 1,
+      "increment": "notes",
+      "name": "derived-show-first",
+      "prompt": "ok that login bug finally makes sense. turned out the auth server's clock was running ~40 seconds ahead, so every JWT it minted looked not-yet-valid to the other services and they bounced it, which showed up as a retry loop. fixed it by turning NTP back on. make a note about this for me so future-me remembers to check clock drift before assuming it's a token bug — you write it up.",
+      "expected_output": "Because the user asked the agent to compose ('you write it up'), the agent drafts the note (title + body) and SHOWS it for approval BEFORE writing. It does not call `sab note new` until approved. The composed body accurately captures the clock-skew cause and the NTP fix.",
+      "files": [],
+      "assertions": [
+        {"text": "Presents a drafted note (title and body) to the user before writing anything"},
+        {"text": "Does NOT call `sab note new` before showing the draft / getting approval (no premature write)"},
+        {"text": "The composed note accurately reflects the clock-skew cause and the NTP fix"},
+        {"text": "Scopes the note to the right context (resolves context first, or otherwise targets getwrite-development)"}
+      ]
+    },
+    {
+      "id": 2,
+      "increment": "notes",
+      "name": "proactive-offer",
+      "prompt": "Before I extend this, does the parse step look ok? I'm about to add retry logic on top of it.\n\n```python\ndef load_rows(path):\n    try:\n        with open(path) as f:\n            return [parse(line) for line in f]\n    except Exception:\n        return []\n```",
+      "expected_output": "The agent reviews the code, notices the bare `except Exception: return []` silently swallows all errors (a landmine, especially before adding retry logic), and PROACTIVELY OFFERS to capture a note about it in a light one-liner. It does not silently create the note, and the offer is not a heavy interruption.",
+      "files": [],
+      "assertions": [
+        {"text": "Proactively offers to capture a note (the user did not ask for one)"},
+        {"text": "Does NOT silently create the note (no `sab note new` without the user's consent)"},
+        {"text": "The offer is lightweight (a line or so), not a heavy multi-step interruption"},
+        {"text": "Correctly identifies the note-worthy issue: the bare except silently swallows errors"}
+      ]
+    },
+    {
+      "id": 3,
+      "increment": "notes",
+      "name": "task-link",
+      "prompt": "take a note: tiptap table insertion still drops the header row when you paste in a multi-row table from Google Docs",
+      "expected_output": "Writes the verbatim note, then notices a clearly-related task on the list (add-tiptap-table-functionality, task_7971678f) and OFFERS to link the note to it, asking before adding `--task`. Uses the exact full task id.",
+      "files": [],
+      "assertions": [
+        {"text": "Writes the verbatim note with the body preserved"},
+        {"text": "Identifies the related task (add-tiptap-table-functionality) and offers to link the note to it"},
+        {"text": "Asks for confirmation before adding `--task` (does not link silently)"},
+        {"text": "When referencing/linking the task, uses the exact full id task_7971678f (not abbreviated)"}
+      ]
+    },
+    {
+      "id": 4,
+      "increment": "briefing",
+      "name": "morning-briefing-all",
+      "prompt": "morning! catch me up on everything thats going on across all my projects before I dig in",
+      "expected_output": "Runs `sab briefing --all` (cross-repo scope, since the user wants the whole board, not one repo). Does NOT just paste the raw output — reads it back, surfacing what actually matters (active work, anything needing attention) in a digest. If the briefing prints collision/skip warnings, mentions them once. Does not modify any data.",
+      "files": [],
+      "assertions": [
+        {"text": "Runs the briefing across all repos with `sab briefing --all` (not context-scoped)"},
+        {"text": "Summarizes/reads back the briefing rather than dumping the raw multi-section output verbatim"},
+        {"text": "Does not run any state-changing sab command (briefing stays read-only)"}
+      ]
+    },
+    {
+      "id": 5,
+      "increment": "briefing",
+      "name": "what-should-i-work-on-scoped",
+      "prompt": "ive got a focused hour before my next meeting. whats the best thing to pick up right now?",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Resolves the current repo (getwrite) to its context (getwrite-development) and scopes to it — `sab briefing --context getwrite-development` (or a context-scoped task list), passing --context explicitly rather than trusting the global. Gives a CONCRETE recommendation from the active tasks, factoring priority/energy for a focused hour, not a restatement of the whole list.",
+      "files": [],
+      "assertions": [
+        {"text": "Resolves the getwrite repo to the getwrite-development context (runs the resolver / uses the right context)"},
+        {"text": "Scopes the read to that context explicitly with `--context getwrite-development` (does not rely on the bare global active context)"},
+        {"text": "Gives a concrete pick (names a specific task to work on) rather than only listing tasks"},
+        {"text": "Does not run any state-changing sab command"}
+      ]
+    },
+    {
+      "id": 6,
+      "increment": "briefing",
+      "name": "weekly-review",
+      "prompt": "its friday — how did this week actually go? what did I ship and what stalled?",
+      "expected_output": "Recognizes this as the weekly review and runs `sab briefing --weekly` (the 7-day shipped/stalled/repo-activity report), not the daily briefing. Reads the result back framed around what shipped vs what stalled. (Note: the weekly briefing is single-context; for a board-wide picture it should run --weekly per active context rather than trusting --weekly --all.)",
+      "files": [],
+      "assertions": [
+        {"text": "Runs the weekly briefing with `sab briefing --weekly` (not the plain daily briefing)"},
+        {"text": "Frames the answer around shipped vs stalled rather than dumping raw output"},
+        {"text": "Does not run any state-changing sab command"}
+      ]
+    },
+    {
+      "id": 7,
+      "increment": "briefing",
+      "name": "briefing-then-offer-followups",
+      "prompt": "run my briefing and help me tidy up anything thats gone stale or is just sitting there stuck",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Resolves context, runs the (context-scoped) briefing, and then OFFERS follow-ups for what it actually surfaces — routing into existing capabilities (offer a task move by id for stale/blocked/in-review items; offer a note for a stale branch decision; offer to triage inbox). Crucially: it reads the REAL output and does not fabricate stale/blocked tasks that aren't there — if those sections are empty it says so and pivots to what IS present (e.g. stale branches, inbox). It OFFERS rather than silently executing any move/done/block.",
+      "files": [],
+      "assertions": [
+        {"text": "Runs the briefing scoped to getwrite-development before proposing any cleanup"},
+        {"text": "Bases its cleanup suggestions on what the briefing actually shows (does not invent stale/blocked tasks that are not in the output)"},
+        {"text": "Offers follow-up actions (task move / note / triage) rather than silently executing them — no state change without user confirmation"},
+        {"text": "When proposing a task state change, references the task by its exact id"}
+      ]
+    },
+    {
+      "id": 8,
+      "increment": "tasks",
+      "name": "add-task-scoped",
+      "prompt": "add a task: pasting a multi-row table from google docs into the editor drops the header row. its fiddly frontend stuff thatll need real focus to get right",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Resolves the getwrite repo to getwrite-development, then forms `sab task add \"<concise title>\" --context getwrite-development` with `--energy deep` inferred from 'real focus / fiddly'. Title is a short slug-ish phrase, NOT the user's whole sentence. Non-interactive (never opens $EDITOR for add). Passes --context explicitly rather than trusting the global.",
+      "files": [],
+      "assertions": [
+        {"text": "Forms a `sab task add` command (not an editor-based or interactive creation)"},
+        {"text": "Scopes the add with `--context getwrite-development` explicitly (resolves the repo to its context first)"},
+        {"text": "Derives a concise title (a few words / slug), not the user's full sentence pasted as the title"},
+        {"text": "Infers `--energy deep` from the 'fiddly / needs real focus' cue"},
+        {"text": "Does not open $EDITOR for the add"}
+      ]
+    },
+    {
+      "id": 9,
+      "increment": "tasks",
+      "name": "state-machine-active-to-done",
+      "prompt": "i just wrapped up finish-getwrite-v1 — mark it done",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "finish-getwrite-v1 (task_4bf73ace) is currently in the 'active' state. The skill knows active -> done is NOT a legal transition (done is only reachable from review), so it does NOT blindly run `sab task done`. It explains the task must pass through review first and offers the two-step active -> review -> done (e.g. `sab task move task_4bf73ace review` then `sab task done task_4bf73ace`), referencing the exact id, by-id with no --context.",
+      "files": [],
+      "assertions": [
+        {"text": "Recognizes that finish-getwrite-v1 is active and that active -> done is an illegal transition (must pass through review)"},
+        {"text": "Does NOT propose a bare `sab task done` as if it would succeed from active"},
+        {"text": "Offers the correct path: move to review first, then done (active -> review -> done)"},
+        {"text": "References the task by its exact id task_4bf73ace and uses by-id commands with no --context"}
+      ]
+    },
+    {
+      "id": 10,
+      "increment": "tasks",
+      "name": "dependency-link-direction",
+      "prompt": "the tiptap table functionality work cant really start until the latex integration is finished. can you record that dependency between them?",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "table = add-tiptap-table-functionality (task_7971678f), latex = finish-tiptap-latex-integration (task_b5400c26). 'table can't start until latex is finished' means latex BLOCKS table, so the correct command is `sab task link task_b5400c26 --blocks task_7971678f` (blocker first). Gets the direction right, uses exact ids, and offers/confirms before running (it's a write) — ideally restating the relationship in plain words.",
+      "files": [],
+      "assertions": [
+        {"text": "Uses `sab task link ... --blocks ...` with the correct direction: latex (task_b5400c26) blocks table (task_7971678f)"},
+        {"text": "Uses the exact full task ids (task_b5400c26 and task_7971678f), not titles or abbreviations"},
+        {"text": "Offers/confirms before recording the dependency rather than silently writing it"},
+        {"text": "Does not add --context to the by-id link command"}
+      ]
+    },
+    {
+      "id": 11,
+      "increment": "tasks",
+      "name": "view-selection-deep-work",
+      "prompt": "ive got a solid uninterrupted block and im sharp right now. whats the best thing on my plate here to sink into?",
+      "cwd": "/Users/jedaisaboteur/Repositories/getwrite",
+      "expected_output": "Recognizes this as a deep-focus question and lists the deep-work view scoped to getwrite-development — `sab task list --view deep-work --context getwrite-development` (active + energy=deep + unblocked) — rather than dumping the whole list or a generic `today`. Resolves context first and passes --context explicitly. Gives a concrete pick, not a restatement.",
+      "files": [],
+      "assertions": [
+        {"text": "Chooses the `deep-work` view (recognizing the deep-focus framing) rather than a bare list or generic today view"},
+        {"text": "Scopes the read to getwrite-development with --context explicitly (resolves the repo to its context first)"},
+        {"text": "Makes a concrete recommendation of what to work on rather than only restating the list"},
+        {"text": "Does not run any state-changing sab command (read-only)"}
+      ]
+    }
+  ]
+}

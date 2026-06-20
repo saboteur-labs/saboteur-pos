@@ -7,3 +7,6 @@ saboteur.secrets.json
 *.db-wal
 .DS_Store
 .claude/settings.local.json
+skills/saboteur-pos/context-map.json
+__pycache__/
+*.pyc
