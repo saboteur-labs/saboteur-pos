@@ -84,11 +84,12 @@ sab task list --all            # all contexts
 
 ```
 backlog → active → review → done
+active  → backlog              (park it)
+review  → active              (kick back from review)
 any non-done → blocked → active
-active → backlog
 ```
 
-`done` is terminal. Moving a blocking task to `done` automatically unblocks dependents.
+`done` is terminal and reachable **only** from `review` — an `active` task cannot jump straight to `done`. `blocked` is reachable from any non-done state. Moving a blocking task to `done` automatically unblocks dependents.
 
 ## Notes
 
@@ -116,6 +117,8 @@ Saboteur scans the immediate subdirectories of `repos_dir` for git repos. The da
 
 `repos_dir` defaults to `~/code`. Each immediate subdirectory that is a git working tree is picked up automatically — no per-repo registration. Bare repos and broken `.git` dirs are reported in the skipped footer instead of being scanned.
 
+To scan more than one root, add `repos_dirs` (a JSON array of paths); it is unioned with `repos_dir`. If a repo basename appears under more than one root, it is ambiguous and excluded from both, with a warning.
+
 Point it at the directory that holds your repos by editing `~/saboteur/saboteur.config.json`:
 
 ```json
@@ -136,7 +139,15 @@ Paths starting with `~/` are expanded to your home directory. A typical layout:
 └── archive.git/      ← bare repo, listed under "Skipped"
 ```
 
-To scope which repos appear under a specific context, set `contexts.repos` for that context (a JSON array of repo directory names) by editing `saboteur.config.json` or the SQLite `contexts.repos` column. If the array is empty (the default), every working repo under `repos_dir` shows up for that context.
+To scope which repos appear under a specific context, link them with:
+
+```bash
+sab context repos add <context> <repo>              # link a whole repo
+sab context repos add <context> <repo> --path '<glob>'   # link a monorepo sub-area
+sab context repos                                    # (per context) list what's linked
+```
+
+This is stored in the context's `repos` array (the SQLite `contexts.repos` column — **not** `saboteur.config.json`). Each entry is either a repo directory name or, for a monorepo sub-context, `{ "repo": <name>, "paths": ["<glob>", …] }`. If the array is empty (the default), every working repo under `repos_dir` shows up for that context. See [Monorepo sub-contexts](#monorepo-sub-contexts) below for what `--path` buys you.
 
 ### Linking commits to tasks
 
@@ -148,11 +159,22 @@ fix(login): fix login redirect [task_a1b2c3d4]
 
 The next `sab briefing` indexes the commit, exposes it under `sab task view <id>`, and auto-updates the task's `repo` / `branch` fields. Bare task IDs, conventional-commit scopes, and trailers are intentionally ignored — the bracketed form is canonical.
 
+### Monorepo sub-contexts
+
+When several areas of one repo are tracked as separate contexts, restrict a context to a sub-area with `--path`:
+
+```bash
+sab context repos add platform-web platform --path 'apps/web/**'
+sab context repos add platform-api platform --path 'apps/api/**'
+```
+
+Now `sab briefing` attributes each commit to the sub-context its changed files fall in (the area with the most matched files wins), and surfaces it under that context's **Repo State** — including commits with **no** task link, shown without the `→ task` arrow. A repo with no `--path` rules behaves exactly as before: only bracket-linked commits are indexed. Globs support `*` (within a path segment), `**` (across segments), and `?`.
+
 All git reads are local — no network access.
 
 ## Config
 
-`~/saboteur/saboteur.config.json` — paths, active context, stale task / stale branch thresholds, `repos_dir`.
+`~/saboteur/saboteur.config.json` — paths, active context, stale task / stale branch thresholds, `repos_dir` (and optional `repos_dirs` for extra roots).
 `~/saboteur/saboteur.secrets.json` — credentials only (gitignored, never in config).
 
 ## Tests
