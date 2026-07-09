@@ -25,6 +25,7 @@ import { runNoteEdit } from './commands/note/edit.js';
 import { runNoteFind } from './commands/note/find.js';
 import { runSync } from './commands/sync.js';
 import { runBriefing } from './commands/briefing.js';
+import { runStandup } from './commands/standup.js';
 import { runGitList } from './commands/git/list.js';
 import { runUi, runUiStop } from './commands/ui.js';
 
@@ -45,6 +46,7 @@ Commands:
   sab briefing [--context]     Daily briefing (read-only)
   sab briefing --all           Daily briefing showing all repos (ignore context scope)
   sab briefing --weekly        7-day shipped/stalled/repo-activity report
+  sab standup [--slot <slot>]  Guided standup check-in (slot-aware Q&A)
   sab sync                     Rebuild knowledge index from disk
   sab git list                 List valid repos under repos_dir with their branches
 
@@ -302,6 +304,16 @@ program
   .option('--config <path>', 'Path to config file')
   .action((options) => runBriefing(options));
 
+// ── sab standup ──────────────────────────────────────────────────────────────
+program
+  .command('standup')
+  .description('Run a guided, slot-aware standup check-in')
+  .option('--context <slug>', 'Override active context')
+  .option('--slot <slot>', 'pre-work | wd-1 | wd-2 | wd-3 | post-work (overrides inference)')
+  .option('--all', 'Not supported for standup — will error')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runStandup(options));
+
 // ── sab git ──────────────────────────────────────────────────────────────────
 const gitCmd = program.command('git').description('Inspect git state visible to Saboteur');
 
@@ -332,4 +344,4 @@ ui
   .description('Stop the UI server')
   .action(() => runUiStop());
 
-program.parse(process.argv);
+program.parseAsync(process.argv);
