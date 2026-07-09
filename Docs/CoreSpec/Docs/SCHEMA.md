@@ -210,7 +210,19 @@ INSERT INTO sources VALUES (
             "owner": "core",
             "enabled": true
         }
-    ]
+    ],
+    "standup": {
+        "slot_windows": {
+            "pre-work": "00:00-09:00",
+            "wd-1": "09:00-12:00",
+            "wd-2": "12:00-15:00",
+            "wd-3": "15:00-18:00",
+            "post-work": "18:00-24:00"
+        }
+    },
+    "retro": {
+        "project_window_days": 14
+    }
 }
 ```
 
@@ -223,6 +235,8 @@ INSERT INTO sources VALUES (
 - `stale_task_days` — tasks in `active` state with `updated_at` older than this trigger the stale flag.
 - `provider_timeout_ms` — Phase 2c+. Maximum wait per plugin data provider. Defined now for forward compatibility.
 - `sources` — auto-managed. Core writes the `personal-notes` entry on init. Plugins append their own. Do not require users to edit this manually.
+- `standup.slot_windows` — map of standup slot name (`pre-work` | `wd-1` | `wd-2` | `wd-3` | `post-work`) to a local-time range formatted `"HH:MM-HH:MM"`, used by `sab standup` to infer the slot when `--slot` is not passed. Backfilled with the defaults shown above on config load if missing; written by `sab init`.
+- `retro.project_window_days` — number of days `sab retro --scope project` looks back for shipped tasks/commits. Defaults to `14`. Backfilled on config load if missing; written by `sab init`.
 
 **Portability:** Copy `saboteur.config.json` + `saboteur.db` + notes directory to resume on a new machine. `secrets_path` is excluded — credentials must be recreated.
 
@@ -272,6 +286,7 @@ updated_at: 2026-03-25
 - `context` falls back to the active context at creation time if not explicitly set.
 - `task_id` is optional. If set, it must reference a valid task `id`.
 - The knowledge index row for this note is rebuilt from frontmatter on every `sab sync`.
+- `sab standup` and `sab retro` write notes with the same base frontmatter plus extra keys: a standup note adds `slot` (one of `pre-work` | `wd-1` | `wd-2` | `wd-3` | `post-work`) and is tagged `standup`; a retro note adds `scope` (`project` | `feature` | `daily`) and `scope_ref` (context slug, task id, or date depending on scope) and is tagged `retro`. Their filenames are `<date>-<primary tag>-<random suffix>.md` rather than a slugified title, so repeated same-day check-ins never collide.
 
 ---
 

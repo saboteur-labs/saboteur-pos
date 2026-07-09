@@ -16,6 +16,16 @@ export interface SourceConfig {
   enabled: boolean;
 }
 
+export interface StandupConfig {
+  // Keys are slot names (`pre-work`, `wd-1`, `wd-2`, `wd-3`, `post-work`);
+  // values are local-time range strings formatted as "HH:MM-HH:MM".
+  slot_windows: Record<string, string>;
+}
+
+export interface RetroConfig {
+  project_window_days: number;
+}
+
 export interface Config {
   version: string;
   db_path: string;
@@ -25,7 +35,23 @@ export interface Config {
   active_context: string;
   briefing: BriefingConfig;
   sources: SourceConfig[];
+  standup?: StandupConfig;
+  retro?: RetroConfig;
 }
+
+const DEFAULT_STANDUP_CONFIG: StandupConfig = {
+  slot_windows: {
+    'pre-work': '00:00-09:00',
+    'wd-1': '09:00-12:00',
+    'wd-2': '12:00-15:00',
+    'wd-3': '15:00-18:00',
+    'post-work': '18:00-24:00',
+  },
+};
+
+const DEFAULT_RETRO_CONFIG: RetroConfig = {
+  project_window_days: 14,
+};
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), 'saboteur', 'saboteur.config.json');
 
@@ -61,6 +87,14 @@ export function loadConfig(configPath?: string): Config {
     const parsed = JSON.parse(raw) as Config;
     if (parsed.briefing && parsed.briefing.stale_branch_days === undefined) {
       parsed.briefing.stale_branch_days = 14;
+    }
+    if (parsed.standup === undefined) {
+      parsed.standup = { ...DEFAULT_STANDUP_CONFIG, slot_windows: { ...DEFAULT_STANDUP_CONFIG.slot_windows } };
+    } else if (parsed.standup.slot_windows === undefined) {
+      parsed.standup.slot_windows = { ...DEFAULT_STANDUP_CONFIG.slot_windows };
+    }
+    if (parsed.retro === undefined) {
+      parsed.retro = { ...DEFAULT_RETRO_CONFIG };
     }
     return parsed;
   } catch {
@@ -98,5 +132,44 @@ export function makeDefaultConfig(notesPath: string, dbPath: string, secretsPath
         enabled: true,
       },
     ],
+    standup: { ...DEFAULT_STANDUP_CONFIG, slot_windows: { ...DEFAULT_STANDUP_CONFIG.slot_windows } },
+    retro: { ...DEFAULT_RETRO_CONFIG },
   };
+}
+
+/**
+ * Parse an "HH:MM" or "24:00" time string into minutes-since-midnight.
+ */
+function parseTimeToMinutes(time: string): number {
+  const [hh, mm] = time.split(':').map(Number);
+  return hh * 60 + mm;
+}
+
+/**
+ * Resolve which standup slot the given date's local time-of-day falls into,
+ * based on the configured `slot_windows` (each formatted "HH:MM-HH:MM").
+ *
+ * Windows are expected to be contiguous and non-overlapping across a single
+ * day; a window ending in "24:00" is treated as inclusive of end-of-day
+ * (i.e. any time up to but not including midnight matches it).
+ *
+ * If multiple windows match (misconfiguration), the first match in
+ * `Object.entries(windows)` iteration order is returned. If no window
+ * matches, an Error is thrown so the caller can surface a clear CLI message.
+ */
+export function resolveSlotFromTime(windows: Record<string, string>, date: Date): string {
+  const nowMinutes = date.getHours() * 60 + date.getMinutes();
+  for (const [slot, range] of Object.entries(windows)) {
+    const [start, end] = range.split('-');
+    const startMinutes = parseTimeToMinutes(start);
+    const endMinutes = parseTimeToMinutes(end);
+    if (startMinutes <= nowMinutes && nowMinutes < endMinutes) {
+      return slot;
+    }
+  }
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  throw new Error(
+    `No configured standup.slot_windows window contains the current time (${hh}:${mm}).`,
+  );
 }
