@@ -65,6 +65,7 @@ const SAB = `${TSX} ${join(process.cwd(), 'src/index.ts')}`;
 export function sab(
   args: string,
   cwd = process.cwd(),
+  input?: string,
 ): { stdout: string; stderr: string; code: number } {
   // spawnSync (vs execSync) captures stderr on success too, not just on throw —
   // needed to assert warnings emitted by commands that still exit 0.
@@ -73,6 +74,7 @@ export function sab(
     cwd,
     shell: true,
     env: { ...process.env, EDITOR: 'true' }, // 'true' exits 0 without doing anything
+    ...(input !== undefined ? { input } : {}),
   });
   return {
     stdout: result.stdout ?? '',
@@ -81,6 +83,10 @@ export function sab(
   };
 }
 
-export function sabConfig(args: string, env: TestEnv): ReturnType<typeof sab> {
-  return sab(`${args} --config ${env.configPath}`);
+export function sabConfig(
+  args: string,
+  env: TestEnv,
+  input?: string,
+): ReturnType<typeof sab> {
+  return sab(`${args} --config ${env.configPath}`, process.cwd(), input);
 }
