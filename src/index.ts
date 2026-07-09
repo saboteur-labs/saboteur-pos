@@ -26,6 +26,7 @@ import { runNoteFind } from './commands/note/find.js';
 import { runSync } from './commands/sync.js';
 import { runBriefing } from './commands/briefing.js';
 import { runStandup } from './commands/standup.js';
+import { runRetro } from './commands/retro.js';
 import { runGitList } from './commands/git/list.js';
 import { runUi, runUiStop } from './commands/ui.js';
 
@@ -47,6 +48,7 @@ Commands:
   sab briefing --all           Daily briefing showing all repos (ignore context scope)
   sab briefing --weekly        7-day shipped/stalled/repo-activity report
   sab standup [--slot <slot>]  Guided standup check-in (slot-aware Q&A)
+  sab retro --scope <s>        Guided retro (project | feature | daily)
   sab sync                     Rebuild knowledge index from disk
   sab git list                 List valid repos under repos_dir with their branches
 
@@ -313,6 +315,18 @@ program
   .option('--all', 'Not supported for standup — will error')
   .option('--config <path>', 'Path to config file')
   .action((options) => runStandup(options));
+
+// ── sab retro ────────────────────────────────────────────────────────────────
+program
+  .command('retro')
+  .description('Run a guided retro (project | feature | daily scope)')
+  .option('--scope <scope>', 'project | feature | daily')
+  .option('--task <id>', 'Task id (required for --scope feature)')
+  .option('--context <slug>', 'Override active context')
+  .option('--date <date>', 'YYYY-MM-DD (daily scope; defaults to today)')
+  .option('--all', 'Not supported for retro — will error')
+  .option('--config <path>', 'Path to config file')
+  .action((options) => runRetro(options));
 
 // ── sab git ──────────────────────────────────────────────────────────────────
 const gitCmd = program.command('git').description('Inspect git state visible to Saboteur');
