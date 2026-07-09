@@ -54,6 +54,11 @@ No implementation exists yet. When implementation begins, document build/lint/te
 - Optional sections (1, 4, 5, 6, 7) are omitted when empty.
 - `sab briefing` must never modify data.
 
+**Standup / Retro Check-ins** (`Docs/feature-specs/standup-retro/standup-retro-spec.md`)
+- `sab standup` — slot-aware daily check-in (`pre-work`/`wd-1`/`wd-2`/`wd-3`/`post-work`, inferred from `standup.slot_windows` in config or set via `--slot`). Recaps done-since-last-session tasks, linked commits, and blocked tasks before asking slot-specific questions.
+- `sab retro` — scope-aware reflection (`--scope project|feature|daily`).
+- Both write an editable note (`tags: ['standup']` / `tags: ['retro']`), discoverable via `sab note find --tag <tag>`.
+
 ### Phase Boundaries
 
 **Phase 1 (Foundation):** CLI only. Build in layer order (Data Model → Tasks → Contexts → Views → Notes → Briefing). Do not implement Phase 2+ logic even if it seems easy — create stubs (nullable columns, config fields) but wire no logic to them.

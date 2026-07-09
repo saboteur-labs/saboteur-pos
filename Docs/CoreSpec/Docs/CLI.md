@@ -441,6 +441,80 @@ Run the daily briefing for the active context. Read-only. See LOGIC.md §7 for f
 
 ---
 
+### `sab standup`
+
+Run a guided, slot-aware standup check-in for the active context (or `--context`). Always writes to a single context — `--all` is rejected.
+
+- Slot is inferred from the current local time via `standup.slot_windows` in config, unless `--slot` is passed explicitly.
+- Recaps (read-only) tasks moved to `done` since the last standup in this context, their linked commits, currently blocked tasks, and the answers to the prior standup's "working on" / "must get done" questions.
+- Asks a slot-specific question set, then writes the answers as a note (`tags: ['standup']`, frontmatter `slot: <slot>`).
+
+**Slots:** `pre-work` | `wd-1` | `wd-2` | `wd-3` | `post-work`
+
+**Flags:**
+| Flag | Values | Default |
+|---|---|---|
+| `--context <slug>` | any valid context slug | active_context |
+| `--slot <slot>` | pre-work \| wd-1 \| wd-2 \| wd-3 \| post-work | inferred from `standup.slot_windows` |
+| `--config <path>` | path to config file | default config path |
+
+**Output:**
+
+```
+Created note_abc123: "Standup — wd-1 — 2026-07-09" → ~/saboteur/notes/2026-07-09-standup-a1b2c3d4.md
+```
+
+Filename is `<date>-<primary tag>-<random suffix>.md` (not the slugified-title form `sab note new` uses) so repeated same-day check-ins never collide. Discoverable later via `sab note find --tag standup`.
+
+**Errors:**
+
+- `--all` passed → `"--all is not meaningful for sab standup — it always writes to a single context. Use --context <slug> instead."`
+- Unknown context → `"Context '<slug>' does not exist."`
+- Invalid `--slot` → `"Invalid slot '<slot>'. Valid slots: pre-work, wd-1, wd-2, wd-3, post-work."`
+- No `--slot` given and no configured window contains the current time → `"No configured standup.slot_windows window contains the current time (HH:MM)."`
+
+---
+
+### `sab retro`
+
+Run a guided, scope-aware retro. Always writes to a single context — `--all` is rejected.
+
+- `--scope` is required: `project`, `feature`, or `daily`.
+  - `feature` requires `--task <id>`; the task id is the `scope_ref`.
+  - `project` scopes to the active context (or `--context`); the context slug is the `scope_ref`. Recap window defaults to `retro.project_window_days` (14 days).
+  - `daily` scopes to a date (`--date YYYY-MM-DD`, defaults to today); the date is the `scope_ref`.
+- Recaps (read-only) shipped tasks and linked commits for the scope.
+- Asks the full 10-question set for `project`/`feature`, or a fixed 3-question set for `daily`.
+- Writes the answers as a note (`tags: ['retro']`, frontmatter `scope: <scope>`, `scope_ref: <ref>`).
+
+**Flags:**
+| Flag | Values | Default |
+|---|---|---|
+| `--scope <scope>` | project \| feature \| daily | required |
+| `--task <id>` | task id | required for `--scope feature` |
+| `--context <slug>` | any valid context slug | active_context |
+| `--date <date>` | YYYY-MM-DD | today (daily scope only) |
+| `--config <path>` | path to config file | default config path |
+
+**Output:**
+
+```
+Created note_def456: "Retro — project — varsentry — 2026-07-09" → ~/saboteur/notes/2026-07-09-retro-b2c3d4e5.md
+```
+
+Filename is `<date>-<primary tag>-<random suffix>.md` (not the slugified-title form `sab note new` uses) so repeated same-day check-ins never collide. Discoverable later via `sab note find --tag retro`.
+
+**Errors:**
+
+- `--all` passed → `"--all is not meaningful for sab retro — it always writes to a single context. Use --context <slug> instead."`
+- Missing/invalid `--scope` → `"--scope is required and must be one of: project, feature, daily."`
+- `--scope feature` without `--task` → `"--task <id> is required for --scope feature."`
+- Unknown task → `"Task '<id>' not found."`
+- Unknown context → `"Context '<slug>' does not exist."`
+- Invalid `--date` → `"Invalid --date '<date>'. Expected format: YYYY-MM-DD."`
+
+---
+
 ### `sab sync`
 
 Rebuild the knowledge index from all enabled sources. See LOGIC.md §9.

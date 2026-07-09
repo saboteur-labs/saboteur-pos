@@ -65,7 +65,11 @@ sab task list --view today     Active tasks sorted by priority + energy
 sab task add "Fix the thing" --priority high --energy deep
 sab task move <id> active
 sab task done <id>
+sab standup                    Guided, slot-aware standup check-in (--slot to override inference)
+sab retro --scope project      Guided retro (project | feature | daily)
 ```
+
+`sab standup` and `sab retro` are interactive: each recaps relevant context (shipped tasks, linked commits, blocked work) read-only, then asks a short question set and writes the answers as a note (tagged `standup` or `retro` respectively — find them later with `sab note find --tag standup` / `--tag retro`). Both always target a single context, so `--all` is rejected; use `--context <slug>` instead.
 
 `sab task list --view today` ranks your active tasks by priority then energy:
 
@@ -216,7 +220,7 @@ All git reads are local — no network access.
 
 ## Config
 
-`~/saboteur/saboteur.config.json` — paths, active context, stale task / stale branch thresholds, `repos_dir` (and optional `repos_dirs` for extra roots).
+`~/saboteur/saboteur.config.json` — paths, active context, stale task / stale branch thresholds, `repos_dir` (and optional `repos_dirs` for extra roots), `standup.slot_windows` (local-time windows used to infer the standup slot), and `retro.project_window_days` (lookback for `sab retro --scope project`, default `14`).
 `~/saboteur/saboteur.secrets.json` — credentials only (gitignored, never in config).
 
 ## Tests

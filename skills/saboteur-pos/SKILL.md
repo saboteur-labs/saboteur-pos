@@ -71,8 +71,10 @@ The `sab` CLI does more than the five workflows above. The parts this skill does
 **not** yet give a guided workflow for are: **retrieving** notes
 (`sab note list` / `view` / `find --tag` / `edit` — capture is covered, search
 and reading back aren't), **context administration** (`sab context new` /
-`delete` / `repos`), and the read-only **dashboard** (`sab ui`), plus `sab sync`
-and `sab git`. Don't quietly improvise a polished workflow for those or imply
+`delete` / `repos`), the read-only **dashboard** (`sab ui`), the interactive
+**check-in commands** `sab standup` and `sab retro` (each prompts its own
+question set directly in the terminal — nothing for this skill to drive), plus
+`sab sync` and `sab git`. Don't quietly improvise a polished workflow for those or imply
 it's a finished skill feature. When the user asks for one, be honest and helpful
 in the same breath:
 
