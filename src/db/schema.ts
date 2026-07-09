@@ -70,5 +70,4 @@ CREATE INDEX IF NOT EXISTS idx_ki_updated ON knowledge_index(updated_at);
 CREATE INDEX IF NOT EXISTS idx_commits_task        ON commits(task_id);
 CREATE INDEX IF NOT EXISTS idx_commits_repo        ON commits(repo);
 CREATE INDEX IF NOT EXISTS idx_commits_author_ts   ON commits(author_ts);
-CREATE INDEX IF NOT EXISTS idx_commits_sub_context ON commits(sub_context);
 `;
