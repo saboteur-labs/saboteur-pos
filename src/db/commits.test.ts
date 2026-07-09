@@ -34,6 +34,7 @@ function commit(overrides: Partial<CommitInput> = {}): CommitInput {
     task_id: null,
     message: 'msg',
     author_ts: '2026-05-01T12:00:00Z',
+    sub_context: null,
     ...overrides,
   };
 }

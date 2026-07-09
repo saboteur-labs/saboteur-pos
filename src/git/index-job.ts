@@ -1,10 +1,18 @@
 import type Database from 'better-sqlite3';
 import type { Config } from '../config.js';
 import { upsertCommit, type CommitInput } from '../db/commits.js';
+import { listContexts, repoEntries } from '../db/contexts.js';
 import { getReposDirs } from '../config.js';
+import { attributeSubContext, type SubContextRule } from './globs.js';
 import { discoverAllRepos } from './discover.js';
 import { extractTaskIds } from './parse.js';
-import { GitTimeoutError, getCommitsSince, listBranches, withGitTimeout } from './read.js';
+import {
+  GitTimeoutError,
+  getChangedFilesByCommit,
+  getCommitsSince,
+  listBranches,
+  withGitTimeout,
+} from './read.js';
 
 export interface IndexCommitsOptions {
   horizonDays?: number;
@@ -42,6 +50,19 @@ export function indexCommits(
     (db.prepare(`SELECT id FROM tasks`).all() as Array<{ id: string }>).map((r) => r.id),
   );
 
+  // Pool sub-context path rules per repo, from every context that restricts a
+  // repo to sub-paths. A repo with no rules is a normal (whole-repo) repo: its
+  // commits are never sub-attributed, so non-monorepo behavior is unchanged.
+  const rulesByRepo = new Map<string, SubContextRule[]>();
+  for (const ctx of listContexts(db)) {
+    for (const entry of repoEntries(ctx)) {
+      if (entry.paths.length === 0) continue;
+      const list = rulesByRepo.get(entry.repo) ?? [];
+      for (const glob of entry.paths) list.push({ glob, context: ctx.id });
+      rulesByRepo.set(entry.repo, list);
+    }
+  }
+
   const since = new Date(Date.now() - horizonDays * 24 * 60 * 60 * 1000).toISOString();
   const perRepoTimeoutMs = options.perRepoTimeoutMs ?? DEFAULT_PER_REPO_TIMEOUT_MS;
   const toUpsert: CommitInput[] = [];
@@ -52,6 +73,10 @@ export function indexCommits(
   for (const repo of repos) {
     try {
       withGitTimeout(perRepoTimeoutMs, () => {
+        const rules = rulesByRepo.get(repo.name);
+        // Only pay for the changed-file scan when this repo has sub-areas.
+        const filesBySha = rules ? getChangedFilesByCommit(repo.path, since) : null;
+
         const branches = listBranches(repo.path);
         const refs = branches.length > 0 ? branches : [undefined];
 
@@ -60,8 +85,13 @@ export function indexCommits(
           for (const c of commits) {
             if (seenShas.has(c.sha)) continue;
             const ids = extractTaskIds(c.message);
-            const knownId = ids.find((id) => taskIds.has(id));
-            if (!knownId) continue;
+            const knownId = ids.find((id) => taskIds.has(id)) ?? null;
+            const subContext = rules
+              ? attributeSubContext(filesBySha!.get(c.sha) ?? [], rules)
+              : null;
+            // Store a commit only if it links to a known task or lands in a
+            // declared sub-area — otherwise it's noise we don't index.
+            if (!knownId && !subContext) continue;
 
             seenShas.add(c.sha);
             const branch = ref ?? null;
@@ -72,11 +102,15 @@ export function indexCommits(
               task_id: knownId,
               message: c.message,
               author_ts: c.author_ts,
+              sub_context: subContext,
             });
 
-            const prev = latestPerTask.get(knownId);
-            if (!prev || c.author_ts > prev.author_ts) {
-              latestPerTask.set(knownId, { repo: repo.name, branch, author_ts: c.author_ts });
+            // tasks.repo/branch tracking follows the task link only.
+            if (knownId) {
+              const prev = latestPerTask.get(knownId);
+              if (!prev || c.author_ts > prev.author_ts) {
+                latestPerTask.set(knownId, { repo: repo.name, branch, author_ts: c.author_ts });
+              }
             }
           }
         }

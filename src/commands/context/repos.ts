@@ -1,11 +1,18 @@
 import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../../config.js';
 import { getDb } from '../../db/index.js';
-import { addContextRepos, getContext, removeContextRepos } from '../../db/contexts.js';
+import {
+  addContextRepoPath,
+  addContextRepos,
+  getContext,
+  removeContextRepos,
+  repoEntries,
+} from '../../db/contexts.js';
 import { discoverAllRepos } from '../../git/discover.js';
 import { c } from '../../colors.js';
 
 interface ReposOptions {
   config?: string;
+  path?: string;
 }
 
 export function runContextReposList(slug: string, options: ReposOptions): void {
@@ -25,8 +32,9 @@ export function runContextReposList(slug: string, options: ReposOptions): void {
     return;
   }
 
-  for (const repo of ctx.repos) {
-    process.stdout.write(`${c.cyan(repo)}\n`);
+  for (const entry of repoEntries(ctx)) {
+    const paths = entry.paths.length > 0 ? c.muted(`  [${entry.paths.join(', ')}]`) : '';
+    process.stdout.write(`${c.cyan(entry.repo)}${paths}\n`);
   }
 }
 
@@ -58,6 +66,20 @@ export function runContextReposAdd(slug: string, repos: string[], options: Repos
       db.close();
       process.exit(1);
     }
+  }
+
+  // `--path <glob>` makes this context a monorepo sub-context: it attaches a
+  // sub-path rule to a single repo rather than linking the whole repo.
+  if (options.path) {
+    if (repos.length !== 1) {
+      process.stderr.write(c.red(`--path takes exactly one repo (got ${repos.length}).\n`));
+      db.close();
+      process.exit(1);
+    }
+    addContextRepoPath(db, slug, repos[0], options.path);
+    db.close();
+    process.stdout.write(c.green(`Linked ${repos[0]} [${options.path}] to ${slug}.\n`));
+    return;
   }
 
   addContextRepos(db, slug, repos);

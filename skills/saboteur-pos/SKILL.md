@@ -171,9 +171,15 @@ python3 "$CLAUDE_SKILL_DIR/scripts/resolve_context.py" add <slug> --path "<glob>
 ```
 
 which lifts a bare-string mapping into object form and bumps the file to
-`version: 2`. Bare-string mappings keep working unchanged. Note this governs
-**interactive** resolution only — commit attribution still keys by repo, so a
-commit under `apps/web` links by the repo, not the sub-context.
+`version: 2`. Bare-string mappings keep working unchanged.
+
+This map governs **interactive** resolution (which context `cd`-ing into a
+subtree switches to). The CLI now also attributes *commits* to sub-contexts on
+its own side: declare the same sub-areas on the context with
+`sab context repos add <ctx> <repo> --path "<glob>"`, and the briefing surfaces
+commits that touched that subtree under the matching context — even unlinked
+ones (shown without the `→ task` arrow). The two declarations are independent
+today (skill map vs. `contexts.repos`); keep them in sync for a monorepo.
 
 ## Pass `--context <slug>` explicitly — don't trust the global
 

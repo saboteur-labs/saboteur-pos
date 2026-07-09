@@ -232,7 +232,8 @@ repos
 
 repos
   .command('add <slug> <repo...>')
-  .description('Link one or more repos to a context')
+  .description('Link one or more repos to a context (use --path for a monorepo sub-area)')
+  .option('--path <glob>', 'Restrict a single repo to a sub-path glob (monorepo sub-context)')
   .option('--config <path>', 'Path to config file')
   .action((slug, repoArgs, options) => runContextReposAdd(slug, repoArgs, options));
 
