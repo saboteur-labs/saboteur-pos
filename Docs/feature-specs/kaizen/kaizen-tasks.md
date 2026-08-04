@@ -106,7 +106,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 8
 **Estimate:** 2
 **Notes:** FR23. Reuses `doneSince`, `blockedInScope`, `commitsForTasks` from `src/commands/checkin/recap.ts` — pass the week-of date as the cutoff.
-**Done:** [ ]
+**Done:** [x] — `src/commands/kaizen/recap.ts` + 10 tests. `doneSince` does take an arbitrary cutoff, so the risk noted against this task did not materialise. `parseRecapRequest` reads the `sab:repeat` `recap` attribute, so the template decides which parts are gathered. Empty contexts print "no movement recorded this week" rather than blank space. **Spec conflict to resolve (see Risks):** requesting `linked_commits` calls `indexCommits`, which writes the derived `commits` cache — FR28 as written forbids writing any table but `knowledge_index`.
 
 ---
 
@@ -117,7 +117,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 4
 **Estimate:** 3
 **Notes:** FR21, FR30. Key off `tags` and never off `type` — Kaizen notes are `type = 'note'`, same as standup/retro.
-**Done:** [ ]
+**Done:** [x] — `src/commands/kaizen/intentions.ts` + 10 tests. Keyed off `tags`, with a test proving a standup note is not mistaken for a kaizen one. Every bad-data path (deleted file, malformed YAML, non-array `intentions`, missing field) yields `[]` rather than throwing — a broken prior week should cost the prefill, not this week's review.
 
 ---
 
@@ -128,7 +128,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 7, 10
 **Estimate:** 2
 **Notes:** FR21.
-**Done:** [ ]
+**Done:** [x] — `promptTable()` in `src/commands/kaizen/sections.ts` + 4 tests. Columns marked `prompt="false"` are shown as row context and never asked, so two prior intentions produce exactly four questions. No prior intentions → prints `empty-message`, asks nothing.
 
 ---
 
@@ -139,7 +139,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 6, 7, 8
 **Estimate:** 2
 **Notes:** FR26. Warn, never block — FR26 is explicit that this is non-fatal.
-**Done:** [ ]
+**Done:** [x] — same `promptTable()`, + 6 tests. Both generated tables share one implementation; they differ only in their row source. Sum warning fires on a total other than 100 but keeps the answers, and stays silent when nothing was answered at all. Rows are labelled by context *name* while answer keys use the *slug*. `protect_or_cut`'s `when` gating is a plain field and lands in Task 15's walk.
 
 ---
 
@@ -228,5 +228,6 @@ expand → render, all pure and independently testable) with the command shell i
 - **Risks:**
   - **Task 3 (5 pts)** carries the most uncertainty — the parser must retain prose losslessly while extracting structure, and every downstream task depends on its AST shape. Worth building against the real template from the first test rather than a reduced fixture.
   - **Task 13 (5 pts)** is where FR4's byte-for-byte promise is actually proven; a naive render-from-AST that reflows markdown will pass casual review and violate the spec. The prose-span comparison test is the guard.
-  - **Tasks 8 and 9** assume `sab context list` ordering is stable and that `recap.ts` helpers accept an arbitrary cutoff date rather than only the standup "since last session" cutoff — verify the latter before starting Task 9, as it may add a point.
+  - ~~**Tasks 8 and 9** assume `recap.ts` helpers accept an arbitrary cutoff~~ — resolved: `doneSince` takes any `cutoffIso`, no extra work needed.
+  - **FR28 vs. commit linking (open).** FR28 says a run must not mutate "any table other than `knowledge_index`", but showing linked commits requires `indexCommits`, which writes the derived `commits` cache. `sab standup` already does exactly this under an identically worded requirement, so the working interpretation is that refreshing a derived index does not count as mutating user data. Either FR28 should be amended to say so explicitly, or the recap must drop commit linking. Flagging rather than silently choosing.
   - **Minor spec/skill drift:** the `saboteur-kaizen-template` skill lists `kaizen.template_path` in its resolution order, but no FR defines that config field. The skill treats it as optional so nothing breaks, but Task 2 should either add the field or the skill line should be dropped.
