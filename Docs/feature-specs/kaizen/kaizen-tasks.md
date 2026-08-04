@@ -62,7 +62,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 4
 **Estimate:** 3
 **Notes:** FR8, FR16. Fail before the first prompt — never half-collect a review then error out.
-**Done:** [ ]
+**Done:** [x] — `src/kaizen/validate.ts` + 22 tests. Id-uniqueness scopes are the subtle part: an `sab:extra` field is checked against the repeat it extends (same per-item answer namespace, so a collision would silently overwrite), but two different extras may reuse an id since each is a separate item. Also rejects a `when` referencing a *later* field — it could never hold when checked, so it would suppress its prompt forever. `REQUIRED_SECTIONS` hardcodes the seven ids, per the spec's non-goal on arbitrary templates.
 
 ---
 
@@ -73,7 +73,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 3
 **Estimate:** 2
 **Notes:** FR14. Scope is deliberately small — equality, inequality, numeric comparison, `and`/`or`. Resist growing an expression language.
-**Done:** [ ]
+**Done:** [x] — `src/kaizen/when.ts` + 18 tests. Parse is separate from evaluate so a malformed condition fails in validation, before the first question. **Semantic call:** an unanswered field makes its comparison false whatever the operator — treating absence as not-equal would fire follow-ups predicated on information the user never gave. `and` binds tighter than `or`.
 
 ---
 
@@ -84,7 +84,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 3
 **Estimate:** 3
 **Notes:** FR12, FR13. Builds on `src/prompt.ts`; inject the ask function so tests drive it without a TTY.
-**Done:** [ ]
+**Done:** [x] — `src/kaizen/prompt-field.ts` + 23 tests. All 8 types validate and re-prompt; enum returns declared casing, percent strips `%`, date rejects impossible-but-well-formed values like `2026-02-30`. **`longtext` reads until a blank line** rather than taking one line — the Kaizen question and honest note are the reflective fields and a single line would shape what gets written. **Load-bearing loop guard:** `ask()` returns `''` on exhausted stdin, so a required field would re-prompt forever; `maxAttempts` (default 10) throws `PromptAbortedError` instead.
 
 ---
 
