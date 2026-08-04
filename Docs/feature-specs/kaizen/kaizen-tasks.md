@@ -40,7 +40,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 2
 **Estimate:** 5
 **Notes:** FR9, FR11, FR15. The verbatim-prose guarantee (FR4) is won or lost here — model prose as opaque spans the parser never normalises. Highest-value unit tests in the feature.
-**Done:** [ ]
+**Done:** [x] — `src/kaizen/parse.ts` + 26 tests. Two-layer: `tokenize()` (prose spans + directives, with source offsets) then `parse()` (section tree). `reassemble()` is exported purely as the losslessness guard — the test asserting it round-trips the shipped template byte-for-byte is the tripwire for FR4. Non-`sab:` HTML comments stay prose, which the template relies on (`<!-- YYYY-MM-DD -->`, the per-context explainer block). Composite directives are kept as `raw-directive` nodes in document order for Task 4. **Carry-over for Task 15:** `parse()` returns `warnings[]` rather than writing to stderr itself, so it stays testable — the command shell must emit them (FR15).
 
 ---
 
