@@ -95,7 +95,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 4
 **Estimate:** 3
 **Notes:** FR17, FR22, FR25. The silent-drop behaviour is deliberate (retiring a project needs no template edit) — assert it explicitly so nobody later "fixes" it into an error.
-**Done:** [ ]
+**Done:** [x] — `src/kaizen/expand.ts` + 21 tests. Produces an `ExpandedDocument` with its own node union (`expanded-repeat`, `expanded-table`), so the renderer walks one shape and answer keys are namespaced (`projects.<slug>.<field>`, `<table>.<row>.<column>`). `order="alpha"` sorts by **slug**, not name, so a renamed context keeps its week-to-week position. **Bug found and fixed in Task 4's fold:** `sab:extra` has no terminator, so the last one swallowed the section's closing `---` and would have rendered a horizontal rule inside one context's snapshot only; `detachTrailingSeparator` returns it to the section. Two regression tests.
 
 ---
 

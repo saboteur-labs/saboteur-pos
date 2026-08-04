@@ -391,8 +391,11 @@ function fold(nodes: Node[], scope: string): Node[] {
         break;
       }
       case 'extra': {
-        const { extra, next } = foldExtra(nodes, i);
+        const { extra, trailing, next } = foldExtra(nodes, i);
         out.push(extra);
+        // The separator after the last extra closes the section, not the block;
+        // leaving it inside would repeat it under one context only.
+        if (trailing) out.push(trailing);
         i = next;
         break;
       }
@@ -558,7 +561,10 @@ function foldRepeat(nodes: Node[], start: number, scope: string): { repeat: Repe
  * section — there is no explicit terminator, since each block is a short list
  * of fields appended to one context's snapshot.
  */
-function foldExtra(nodes: Node[], start: number): { extra: ExtraNode; next: number } {
+function foldExtra(
+  nodes: Node[],
+  start: number,
+): { extra: ExtraNode; trailing?: ProseNode; next: number } {
   const d = (nodes[start] as RawDirectiveNode).directive;
   const children: Node[] = [];
 
@@ -570,6 +576,8 @@ function foldExtra(nodes: Node[], start: number): { extra: ExtraNode; next: numb
     i++;
   }
 
+  const trailing = detachTrailingSeparator(children);
+
   return {
     extra: {
       kind: 'extra',
@@ -577,8 +585,37 @@ function foldExtra(nodes: Node[], start: number): { extra: ExtraNode; next: numb
       children: fold(children, `extra:${d.attrs.context}`),
       directive: d,
     },
+    trailing,
     next: i,
   };
+}
+
+/** A horizontal rule and the whitespace around it, at the end of a span. */
+const TRAILING_SEPARATOR = /\n[ \t]*---[ \t]*\n?\s*$/;
+
+/**
+ * Split a closing `---` off the end of a block's children.
+ *
+ * An `sab:extra` has no terminator, so it swallows everything up to the next
+ * extra or the end of its section — including the rule that closes the section.
+ * Left in place, that rule would be emitted inside one context's snapshot and
+ * no other. Detaching it returns it to the section, where it renders once.
+ */
+function detachTrailingSeparator(children: Node[]): ProseNode | undefined {
+  const lastIndex = children.length - 1;
+  const last = children[lastIndex];
+  if (last?.kind !== 'prose') return undefined;
+
+  const match = TRAILING_SEPARATOR.exec(last.text);
+  if (!match) return undefined;
+
+  const kept = last.text.slice(0, match.index);
+  if (kept === '') {
+    children.splice(lastIndex, 1);
+  } else {
+    children[lastIndex] = { kind: 'prose', text: kept };
+  }
+  return { kind: 'prose', text: match[0] };
 }
 
 function splitList(raw: string | undefined): string[] | undefined {
