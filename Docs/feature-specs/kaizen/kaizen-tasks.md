@@ -51,7 +51,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 3
 **Estimate:** 3
 **Notes:** FR11, FR17.
-**Done:** [ ]
+**Done:** [x] — `fold()` pass in `src/kaizen/parse.ts` + 14 more tests (40 in the file). A parsed document now contains no `raw-directive` nodes, asserted by a tree walk. **Design call worth reviewing:** a `sab:table` absorbs the markdown table block that follows it as a `placeholder`, so Task 13 can keep the header row verbatim and replace only the empty body rows — otherwise a run renders a filled table beside a blank skeleton. This is the one place a directive's extent is located by looking at prose shape (contiguous `|` lines); the directive still declares that a table exists and names its columns, so FR9 holds in substance, but it is the closest the parser comes to the line. **Section 6's `1. 2. 3.` list skeleton has the same problem and is not yet handled** — Task 13 must absorb it the same way or the note will show an empty numbered list beside the real intentions.
 
 ---
 

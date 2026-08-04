@@ -92,16 +92,76 @@ export interface ListNode {
 }
 
 /**
- * A recognised directive this layer does not yet build a node for — the
- * composite table/repeat/extra family, consumed in the next layer. Kept in
- * document order so nothing is lost in the meantime.
+ * A recognised directive not yet folded into a composite node. Present only
+ * between the flat pass and `fold()`; a parsed document contains none.
  */
 export interface RawDirectiveNode {
   kind: 'raw-directive';
   directive: Directive;
 }
 
-export type Node = ProseNode | FieldNode | FollowupNode | ListNode | RawDirectiveNode;
+export interface ColumnSpec {
+  id: string;
+  type?: string;
+  values?: string[];
+  source?: string;
+  /** `prompt="false"` marks a column whose values come from data, not the user. */
+  prompt: boolean;
+  directive: Directive;
+}
+
+export interface TableNode {
+  kind: 'table';
+  id: string;
+  /** Row source, e.g. `contexts+fixed` or `from:previous.intentions`. */
+  rows?: string;
+  exclude?: string[];
+  emptyMessage?: string;
+  warnUnlessSumsTo?: number;
+  columns: ColumnSpec[];
+  fixedRows: string[];
+  /**
+   * The markdown table block this directive governs, captured verbatim. Its
+   * header row is preserved on render; its empty body rows are replaced by the
+   * generated ones.
+   */
+  placeholder?: string;
+  directive: Directive;
+}
+
+export interface RepeatNode {
+  kind: 'repeat';
+  id: string;
+  /** Where iteration items come from, e.g. `contexts`. */
+  source: string;
+  exclude: string[];
+  order?: string;
+  skippable: boolean;
+  /** `required` when a skip must carry a reason. */
+  skipReason?: string;
+  /** Recap data to show before each iteration's prompts. */
+  recap: string[];
+  children: Node[];
+  directive: Directive;
+}
+
+export interface ExtraNode {
+  kind: 'extra';
+  /** Context slug these fields are appended to. */
+  context: string;
+  children: Node[];
+  directive: Directive;
+}
+
+export type Node =
+  | ProseNode
+  | FieldNode
+  | FollowupNode
+  | ListNode
+  | TableNode
+  | RepeatNode
+  | ExtraNode
+  | RawDirectiveNode;
 
 export interface SectionNode {
   id: string;
@@ -286,13 +346,247 @@ export function parse(body: string): KaizenDocument {
         });
         break;
       default:
-        // Composite directives (table/column/fixed-rows/repeat/end-repeat/extra)
-        // are recognised vocabulary handled by the next layer.
+        // Composite directives are folded into structure below.
         current.push({ kind: 'raw-directive', directive: d });
     }
   }
 
+  doc.preamble = fold(doc.preamble, 'preamble');
+  for (const section of doc.sections) {
+    section.children = fold(section.children, section.id);
+  }
+
   return doc;
+}
+
+/**
+ * Fold the composite directive families into single nodes:
+ * `table` absorbs its columns, fixed rows, and markdown block; `repeat` absorbs
+ * everything up to `end-repeat`; `extra` absorbs the fields that follow it.
+ */
+function fold(nodes: Node[], scope: string): Node[] {
+  const out: Node[] = [];
+  let i = 0;
+
+  while (i < nodes.length) {
+    const node = nodes[i];
+    if (node.kind !== 'raw-directive') {
+      out.push(node);
+      i++;
+      continue;
+    }
+
+    const d = node.directive;
+    switch (d.name) {
+      case 'table': {
+        const { table, next } = foldTable(nodes, i, out);
+        out.push(table);
+        i = next;
+        break;
+      }
+      case 'repeat': {
+        const { repeat, next } = foldRepeat(nodes, i, scope);
+        out.push(repeat);
+        i = next;
+        break;
+      }
+      case 'extra': {
+        const { extra, next } = foldExtra(nodes, i);
+        out.push(extra);
+        i = next;
+        break;
+      }
+      case 'end-repeat':
+        throw new KaizenParseError(
+          `Section '${scope}' has a '<!-- sab:end-repeat -->' with no matching '<!-- sab:repeat -->'.`,
+        );
+      case 'column':
+      case 'fixed-rows':
+        throw new KaizenParseError(
+          `Section '${scope}' has a '<!-- sab:${d.name} ... -->' outside any '<!-- sab:table ... -->'.`,
+        );
+      default:
+        out.push(node);
+        i++;
+    }
+  }
+
+  return out;
+}
+
+/** True for prose that is only whitespace — allowed between stacked directives. */
+const isBlank = (n: Node): boolean => n.kind === 'prose' && n.text.trim() === '';
+
+function foldTable(nodes: Node[], start: number, out: Node[]): { table: TableNode; next: number } {
+  const d = (nodes[start] as RawDirectiveNode).directive;
+  const columns: ColumnSpec[] = [];
+  const fixedRows: string[] = [];
+
+  let i = start + 1;
+  // Columns and fixed rows are stacked directly under the table directive, with
+  // only line breaks between them.
+  while (i < nodes.length) {
+    const n = nodes[i];
+    if (isBlank(n)) {
+      i++;
+      continue;
+    }
+    if (n.kind !== 'raw-directive') break;
+    const name = n.directive.name;
+    if (name === 'column') {
+      const values = n.directive.attrs.values;
+      columns.push({
+        id: requireAttr(n.directive, 'id'),
+        type: n.directive.attrs.type,
+        values: values === undefined ? undefined : values.split('|'),
+        source: n.directive.attrs.source,
+        prompt: n.directive.attrs.prompt !== 'false',
+        directive: n.directive,
+      });
+      i++;
+      continue;
+    }
+    if (name === 'fixed-rows') {
+      fixedRows.push(...n.directive.positional);
+      i++;
+      continue;
+    }
+    break;
+  }
+
+  const table: TableNode = {
+    kind: 'table',
+    id: requireAttr(d, 'id'),
+    rows: d.attrs.rows,
+    exclude: splitList(d.attrs.exclude),
+    emptyMessage: d.attrs['empty-message'],
+    warnUnlessSumsTo: optionalInt(d, 'warn-unless-sums-to'),
+    columns,
+    fixedRows,
+    directive: d,
+  };
+
+  // Absorb the markdown table block this directive governs. The directive
+  // declares that a table exists and names its columns; this only locates the
+  // block's extent so the renderer can keep the header row and replace the
+  // empty body rows, rather than emitting a filled table beside a blank one.
+  const next = nodes[i];
+  if (next?.kind === 'prose') {
+    const split = extractTableBlock(next.text);
+    if (split) {
+      if (split.before) out.push({ kind: 'prose', text: split.before });
+      table.placeholder = split.block;
+      nodes[i] = { kind: 'prose', text: split.after };
+    }
+  }
+
+  return { table, next: i };
+}
+
+/**
+ * Locate a contiguous run of markdown table rows (lines whose first non-space
+ * character is `|`) inside a prose span.
+ *
+ * `before + block + after` reconstructs the input exactly — the separating
+ * newlines are kept rather than eaten by the split, so folding a table out of a
+ * prose span stays lossless.
+ */
+export function extractTableBlock(
+  text: string,
+): { before: string; block: string; after: string } | null {
+  const lines = text.split('\n');
+  const isRow = (l: string) => l.trimStart().startsWith('|');
+  const first = lines.findIndex(isRow);
+  if (first === -1) return null;
+  let last = first;
+  while (last + 1 < lines.length && isRow(lines[last + 1])) last++;
+
+  const before = lines.slice(0, first).join('\n') + (first > 0 ? '\n' : '');
+  const block = lines.slice(first, last + 1).join('\n');
+  const after = last + 1 < lines.length ? '\n' + lines.slice(last + 1).join('\n') : '';
+
+  return { before, block, after };
+}
+
+function foldRepeat(nodes: Node[], start: number, scope: string): { repeat: RepeatNode; next: number } {
+  const d = (nodes[start] as RawDirectiveNode).directive;
+  const children: Node[] = [];
+
+  let i = start + 1;
+  let closed = false;
+  while (i < nodes.length) {
+    const n = nodes[i];
+    if (n.kind === 'raw-directive' && n.directive.name === 'end-repeat') {
+      closed = true;
+      i++;
+      break;
+    }
+    if (n.kind === 'raw-directive' && n.directive.name === 'repeat') {
+      throw new KaizenParseError(
+        `Section '${scope}' nests '<!-- sab:repeat -->' inside another repeat, which is not supported.`,
+      );
+    }
+    children.push(n);
+    i++;
+  }
+
+  if (!closed) {
+    throw new KaizenParseError(
+      `Section '${scope}' has an unclosed '<!-- sab:repeat ... -->' — no '<!-- sab:end-repeat -->' was found.`,
+    );
+  }
+
+  return {
+    repeat: {
+      kind: 'repeat',
+      id: requireAttr(d, 'id'),
+      source: requireAttr(d, 'source'),
+      exclude: splitList(d.attrs.exclude) ?? [],
+      order: d.attrs.order,
+      skippable: d.attrs.skippable === 'true',
+      skipReason: d.attrs['skip-reason'],
+      recap: splitList(d.attrs.recap) ?? [],
+      children: fold(children, scope),
+      directive: d,
+    },
+    next: i,
+  };
+}
+
+/**
+ * An `sab:extra` block runs until the next `sab:extra` or the end of its
+ * section — there is no explicit terminator, since each block is a short list
+ * of fields appended to one context's snapshot.
+ */
+function foldExtra(nodes: Node[], start: number): { extra: ExtraNode; next: number } {
+  const d = (nodes[start] as RawDirectiveNode).directive;
+  const children: Node[] = [];
+
+  let i = start + 1;
+  while (i < nodes.length) {
+    const n = nodes[i];
+    if (n.kind === 'raw-directive' && n.directive.name === 'extra') break;
+    children.push(n);
+    i++;
+  }
+
+  return {
+    extra: {
+      kind: 'extra',
+      context: requireAttr(d, 'context'),
+      children: fold(children, `extra:${d.attrs.context}`),
+      directive: d,
+    },
+    next: i,
+  };
+}
+
+function splitList(raw: string | undefined): string[] | undefined {
+  if (raw === undefined) return undefined;
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 function requireAttr(d: Directive, key: string): string {
