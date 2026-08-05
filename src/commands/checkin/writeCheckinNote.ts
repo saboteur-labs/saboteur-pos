@@ -13,6 +13,15 @@ export interface CreateCheckinNoteOptions {
   extraFrontmatter: Record<string, unknown>;
   body: string;
   contextId: string;
+  /**
+   * Timestamp for `created_at`/`updated_at`. Defaults to today's date. Pass a
+   * full ISO timestamp where "most recent note wins" lookups must not tie —
+   * date-only values make two same-day notes indistinguishable to an
+   * `ORDER BY created_at DESC LIMIT 1`.
+   */
+  createdAt?: string;
+  /** Filename date prefix. Defaults to today; pass the period the note covers. */
+  filenameDate?: string;
 }
 
 export interface CreateCheckinNoteResult {
@@ -34,10 +43,11 @@ export function createCheckinNote(
   mkdirSync(notesPath, { recursive: true });
 
   const id = generateId('note');
-  const now = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
+  const now = opts.createdAt ?? today;
   const shortId = randomBytes(4).toString('hex');
   const primaryTag = opts.tags[0] ?? 'note';
-  const filename = `${now}-${primaryTag}-${shortId}.md`;
+  const filename = `${opts.filenameDate ?? today}-${primaryTag}-${shortId}.md`;
   const filePath = join(notesPath, filename);
 
   const frontmatter = {

@@ -161,7 +161,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 13
 **Estimate:** 3
 **Notes:** FR29–FR31, FR33. Reuses `createCheckinNote`; extend its options for the extra frontmatter rather than forking it.
-**Done:** [ ]
+**Done:** [x] — `src/commands/kaizen/persist.ts` + 10 tests. Reuses `createCheckinNote`, extended with two optional fields (`createdAt`, `filenameDate`) rather than forked; existing callers are unaffected. Notes are filed under the **week under review**, not the day written, so a Monday review of last week sorts where it belongs. **Ordering defect found by test:** FR21's `ORDER BY created_at DESC LIMIT 1` ties for two same-week reviews — at date granularity always, and even at millisecond granularity for back-to-back writes, which is what the test hit. Fixed with full-ISO `created_at` *plus* a `rowid DESC` tie-break, so the newest review wins regardless of clock resolution. **Known gap (Task 18):** the file write precedes the DB transaction, so a failing index write leaves an orphaned `.md`. FR29 wants neither written — needs a write-after-commit or cleanup-on-throw in the shared writer, which would also fix `sab standup`/`sab retro`.
 
 ---
 

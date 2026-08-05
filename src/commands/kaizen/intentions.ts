@@ -23,6 +23,12 @@ interface KaizenRow {
 /**
  * Most recently created `kaizen`-tagged note in `contextId`, or null.
  *
+ * Ordered by `created_at` with `rowid` as the tie-break. Two reviews of the same
+ * week are allowed, and timestamps alone can tie — at date granularity always,
+ * and even at millisecond granularity for back-to-back writes. Falling back to
+ * insertion order means the newest review always wins rather than the answer
+ * depending on clock resolution.
+ *
  * Keyed off `tags`, never off `type` — Kaizen notes are ordinary
  * `type = 'note'` rows, exactly like standup and retro, because
  * `listKnowledgeEntries` hardcodes that type and any other value would make
@@ -38,7 +44,7 @@ export function mostRecentKaizen(db: Database.Database, contextId: string): Prio
     .prepare(
       `SELECT ki.id, ki.path, ki.created_at FROM knowledge_index ki, json_each(ki.tags)
        WHERE ki.type = 'note' AND json_each.value = 'kaizen' AND ki.context_id = ?
-       ORDER BY ki.created_at DESC LIMIT 1`,
+       ORDER BY ki.created_at DESC, ki.rowid DESC LIMIT 1`,
     )
     .get(contextId) as KaizenRow | undefined;
 
