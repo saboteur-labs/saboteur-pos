@@ -115,14 +115,13 @@ describe('persistKaizen', () => {
   });
 
   it('leaves no note behind when the index write fails', () => {
-    // Force the transactional half to fail: a context the FK will reject.
-    db.exec('PRAGMA foreign_keys = ON');
     db.exec('DROP TABLE knowledge_index');
 
     expect(() => persist()).toThrow();
-    // The file write precedes the transaction, so this documents current
-    // behaviour rather than asserting a rollback that does not exist.
-    expect(readdirSync(notesDir).length).toBeLessThanOrEqual(1);
+    // The file must be written before indexing, since the row records its path.
+    // A failed index therefore has to clean the file up, or the pair is no
+    // longer all-or-nothing.
+    expect(readdirSync(notesDir)).toEqual([]);
   });
 
   it('does not touch task state', () => {

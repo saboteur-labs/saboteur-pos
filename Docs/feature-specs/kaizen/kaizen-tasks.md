@@ -205,7 +205,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 15
 **Estimate:** 3
 **Notes:** FR3. The unchanged-hash assertion is the regression guard for the feature's core promise — it must fail loudly if anyone adds a write path later.
-**Done:** [ ]
+**Done:** [x] — 7 more tests in `tests/kaizen.test.ts` (30 in the file). Immutability is asserted on **bytes and mtime together**: mtime catches a rewrite with identical content, which byte-equality alone would pass — verified that the tripwire actually trips before relying on it. Also asserts the recorded `template_hash` matches the file, and that editing the template between runs changes it, which is what makes "which version produced this review" answerable. Interrupted runs leave no note, no index row, and an untouched template. **Closed the FR29 gap from Task 14:** `createCheckinNote` now removes the file if the index transaction throws, so the pair is all-or-nothing per Invariant 5 — this fixes `sab standup` and `sab retro` too.
 
 ---
 
@@ -229,5 +229,6 @@ expand → render, all pure and independently testable) with the command shell i
   - **Task 3 (5 pts)** carries the most uncertainty — the parser must retain prose losslessly while extracting structure, and every downstream task depends on its AST shape. Worth building against the real template from the first test rather than a reduced fixture.
   - **Task 13 (5 pts)** is where FR4's byte-for-byte promise is actually proven; a naive render-from-AST that reflows markdown will pass casual review and violate the spec. The prose-span comparison test is the guard.
   - ~~**Tasks 8 and 9** assume `recap.ts` helpers accept an arbitrary cutoff~~ — resolved: `doneSince` takes any `cutoffIso`, no extra work needed.
+  - ~~**FR29 partial writes**~~ — resolved in Task 18: the shared note writer now cleans up the file when the index write fails.
   - **FR28 vs. commit linking (open).** FR28 says a run must not mutate "any table other than `knowledge_index`", but showing linked commits requires `indexCommits`, which writes the derived `commits` cache. `sab standup` already does exactly this under an identically worded requirement, so the working interpretation is that refreshing a derived index does not count as mutating user data. Either FR28 should be amended to say so explicitly, or the recap must drop commit linking. Flagging rather than silently choosing.
   - **Minor spec/skill drift:** the `saboteur-kaizen-template` skill lists `kaizen.template_path` in its resolution order, but no FR defines that config field. The skill treats it as optional so nothing breaks, but Task 2 should either add the field or the skill line should be dropped.

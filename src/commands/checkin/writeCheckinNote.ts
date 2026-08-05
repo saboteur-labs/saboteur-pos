@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import type Database from 'better-sqlite3';
 import matter from 'gray-matter';
@@ -62,20 +62,32 @@ export function createCheckinNote(
 
   writeFileSync(filePath, matter.stringify(opts.body, frontmatter), 'utf-8');
 
-  db.transaction(() => {
-    upsertKnowledgeEntry(db, {
-      id,
-      source_id: 'personal-notes',
-      type: 'note',
-      title: opts.title,
-      tags: opts.tags,
-      task_id: null,
-      context_id: opts.contextId,
-      path: filePath,
-      created_at: now,
-      updated_at: now,
-    });
-  })();
+  try {
+    db.transaction(() => {
+      upsertKnowledgeEntry(db, {
+        id,
+        source_id: 'personal-notes',
+        type: 'note',
+        title: opts.title,
+        tags: opts.tags,
+        task_id: null,
+        context_id: opts.contextId,
+        path: filePath,
+        created_at: now,
+        updated_at: now,
+      });
+    })();
+  } catch (err) {
+    // The file has to be written before indexing (the row records its path), so
+    // a failed index would otherwise strand an unreferenced note on disk.
+    // Removing it keeps the pair all-or-nothing, per the no-partial-state rule.
+    try {
+      rmSync(filePath, { force: true });
+    } catch {
+      /* the original failure is the one worth reporting */
+    }
+    throw err;
+  }
 
   return { id, path: filePath };
 }

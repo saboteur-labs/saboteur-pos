@@ -1,4 +1,5 @@
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs';
+import { createHash } from 'crypto';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import matter from 'gray-matter';
 import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -346,6 +347,91 @@ describe('sab kaizen', () => {
 
       expect(result.code).not.toBe(0);
       expect(result.stderr).toContain('supports schema 1');
+    });
+  });
+
+  describe('immutability — a review never writes the template', () => {
+    it('leaves the template byte-identical and its mtime untouched', () => {
+      const path = templateIn(env.configPath);
+      const before = readFileSync(path);
+      const beforeMtime = statSync(path).mtimeMs;
+
+      sabConfig('kaizen --week-of 2026-08-03', env, baseAnswers());
+
+      expect(readFileSync(path).equals(before)).toBe(true);
+      expect(statSync(path).mtimeMs).toBe(beforeMtime);
+    });
+
+    it('records the hash of the template it actually ran against', () => {
+      const path = templateIn(env.configPath);
+      const expected = createHash('sha256').update(readFileSync(path)).digest('hex');
+
+      sabConfig('kaizen --week-of 2026-08-03', env, baseAnswers());
+
+      const fm = matter(readFileSync(join(env.notesPath, noteFiles(env)[0]), 'utf-8')).data;
+      expect(fm.template_hash).toBe(expected);
+    });
+
+    it('records a different hash after the template is edited between runs', () => {
+      const path = templateIn(env.configPath);
+      sabConfig('kaizen --week-of 2026-07-27', env, baseAnswers());
+      const first = matter(
+        readFileSync(join(env.notesPath, noteFiles(env)[0]), 'utf-8'),
+      ).data.template_hash;
+
+      writeFileSync(
+        path,
+        readFileSync(path, 'utf-8').replace('Three maximum.', 'Two maximum.'),
+        'utf-8',
+      );
+
+      const secondRun = [
+        '', '3', '2', 'fragmented', 'Lost Tuesday',
+        'held', 'kept it', // section 2 now has last run's intention
+        'Batch switches', '',
+        '60', '40', 'Y',
+        'Ship kaizen', '',
+        'Nothing to add', '',
+        '',
+      ].join('\n') + '\n';
+      sabConfig('kaizen --week-of 2026-08-03', env, secondRun);
+
+      const latest = noteFiles(env).find((f) => f.startsWith('2026-08-03'))!;
+      const second = matter(readFileSync(join(env.notesPath, latest), 'utf-8')).data.template_hash;
+
+      // The hash is what makes "which version produced this review" answerable.
+      expect(second).not.toBe(first);
+    });
+
+    it('leaves the template untouched even when the run fails', () => {
+      const path = templateIn(env.configPath);
+      const before = readFileSync(path);
+
+      // Input runs out at the first required field.
+      const result = sabConfig('kaizen --week-of 2026-08-03', env, '\n');
+
+      expect(result.code).not.toBe(0);
+      expect(readFileSync(path).equals(before)).toBe(true);
+    });
+  });
+
+  describe('an interrupted run', () => {
+    it('writes no note when input runs out mid-flow', () => {
+      const result = sabConfig('kaizen --week-of 2026-08-03', env, '\n3\n2\n');
+
+      expect(result.code).not.toBe(0);
+      expect(noteFiles(env)).toEqual([]);
+    });
+
+    it('leaves nothing in the knowledge index either', () => {
+      sabConfig('kaizen --week-of 2026-08-03', env, '\n3\n2\n');
+      const found = sabConfig('note find --tag kaizen', env);
+      expect(found.stdout).not.toContain('Kaizen —');
+    });
+
+    it('explains why it stopped', () => {
+      const result = sabConfig('kaizen --week-of 2026-08-03', env, '\n3\n2\n');
+      expect(result.stderr).toMatch(/Gave up prompting|required/);
     });
   });
 
