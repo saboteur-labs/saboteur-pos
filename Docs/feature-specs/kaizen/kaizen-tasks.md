@@ -172,7 +172,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 5, 9, 11, 12, 14
 **Estimate:** 3
 **Notes:** FR18, FR19, FR28, FR32, FR34. Follow the `sab standup` registration shape in `src/index.ts`, including the `--all` rejection precedent.
-**Done:** [ ]
+**Done:** [x] — `src/commands/kaizen.ts` (shell) + `src/commands/kaizen/run.ts` (question walker) + registration, with 23 tests in `tests/kaizen.test.ts`. Nothing about the seven sections is hardcoded in the walker — the template drives which questions exist, their order, type, and conditions. Parser warnings now reach stderr, closing Task 3's carry-over. **Bug found by live run:** `--config` after a nested subcommand is parsed by the *parent* command, so `sab kaizen template edit --config X` silently used the default `~/saboteur` path; fixed with `optsWithGlobals()`.
 
 ---
 
@@ -183,7 +183,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 2
 **Estimate:** 1
 **Notes:** FR6, FR7. This is the CLI's only template write path — the `saboteur-kaizen-template` skill drives the same file separately and the CLI must not know about it.
-**Done:** [ ]
+**Done:** [x] — `src/commands/kaizen/templateEdit.ts`, pulled forward because Task 15's shell imports it. Both entry points exit without running a review; missing `$EDITOR` gives the standard message.
 
 ---
 
@@ -194,7 +194,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 15
 **Estimate:** 1
 **Notes:** FR20. Prompt for it last, so the measurement covers the actual review.
-**Done:** [ ]
+**Done:** [x] — done as part of Task 15 rather than after it, because a static default would have been actively wrong. **Ordering conflict resolved:** the template places "Time spent on this review" *second*, where elapsed time is necessarily zero. It is now asked last (`deferFields`) while still *rendering* in its template position — FR18's ordering requirement is about sections, and the preamble is not one. Defaults resolve through a `defaultFor(id)` callback so they are computed when asked, not when the run starts.
 
 ---
 
