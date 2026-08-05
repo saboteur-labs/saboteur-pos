@@ -150,7 +150,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 7, 8
 **Estimate:** 5
 **Notes:** FR4. The byte-for-byte assertion is the single most important test in the feature — it is what makes the immutability promise observable in the output, not just the file.
-**Done:** [ ]
+**Done:** [x] — `src/kaizen/render.ts` + 24 tests. The renderer only ever *appends* an answer to prose or *replaces* a placeholder it was handed; it never regenerates markdown from structure. Section 6's list stub is now absorbed in `fold()` (the debt from Task 4), matching the table treatment. **Two defects that the property tests passed straight over and only rendering a full review exposed:** (a) every directive left a doubled blank line, since the template puts a blank line either side of it — fixed by absorbing the directive's line ending into its token, keeping `raw` a true slice so reassembly stays lossless; (b) follow-up answers were appended to the end of the blockquote instruction they hang off. Both now have regression tests. **Open cosmetic question:** the template's author-facing `<!-- ... -->` hints (`<!-- YYYY-MM-DD -->`, the per-context explainer) are reproduced into the note. Invisible when rendered, slightly noisy in raw markdown — stripping them would mean deciding which comments are "authoring" and which are "content", which is the prose interpretation FR9 forbids.
 
 ---
 

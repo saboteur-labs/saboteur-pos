@@ -88,6 +88,12 @@ export interface ListNode {
   min?: number;
   max?: number;
   carriesForwardTo?: string;
+  /**
+   * The empty numbered-list stub this directive governs (`1.` / `2.` / `3.`),
+   * captured verbatim so the renderer replaces it rather than printing real
+   * entries beside a blank list.
+   */
+  placeholder?: string;
   directive: Directive;
 }
 
@@ -202,10 +208,12 @@ export function tokenize(body: string): Token[] {
     if (m.index > cursor) {
       tokens.push({ kind: 'prose', text: body.slice(cursor, m.index), start: cursor, end: m.index });
     }
-    const end = m.index + m[0].length;
+    const end = m.index + m[0].length + trailingBlankLength(body, m.index + m[0].length);
     tokens.push({
       kind: 'directive',
-      directive: { ...parseDirective(inner), start: m.index, end, raw: m[0] },
+      // `raw` spans the absorbed line ending too, so the token still slices back
+      // out of the body exactly and reassembly stays lossless.
+      directive: { ...parseDirective(inner), start: m.index, end, raw: body.slice(m.index, end) },
     });
     cursor = end;
   }
@@ -214,6 +222,19 @@ export function tokenize(body: string): Token[] {
     tokens.push({ kind: 'prose', text: body.slice(cursor), start: cursor, end: body.length });
   }
   return tokens;
+}
+
+/**
+ * Length of the line ending a directive occupies, plus one following blank line.
+ *
+ * Directives sit on their own line with a blank line after them, so removing
+ * only the comment would leave two blank lines where the template shows one.
+ * Absorbing the line into the directive token means the rendered note keeps the
+ * template's spacing instead of accumulating a gap at every directive.
+ */
+function trailingBlankLength(body: string, from: number): number {
+  const match = /^[ \t]*\r?\n(\r?\n)?/.exec(body.slice(from));
+  return match ? match[0].length : 0;
 }
 
 function parseDirective(inner: string): Pick<Directive, 'name' | 'attrs' | 'positional'> {
@@ -370,6 +391,22 @@ function fold(nodes: Node[], scope: string): Node[] {
 
   while (i < nodes.length) {
     const node = nodes[i];
+    if (node.kind === 'list') {
+      // Same problem the table placeholder solves: the stub in the template is
+      // an empty numbered list, so leaving it as prose would print the real
+      // intentions directly beneath a blank `1. 2. 3.`.
+      const next = nodes[i + 1];
+      if (next?.kind === 'prose') {
+        const split = extractListBlock(next.text);
+        if (split) {
+          node.placeholder = split.block;
+          nodes[i + 1] = { kind: 'prose', text: split.before + split.after };
+        }
+      }
+      out.push(node);
+      i++;
+      continue;
+    }
     if (node.kind !== 'raw-directive') {
       out.push(node);
       i++;
@@ -503,6 +540,34 @@ export function extractTableBlock(
   if (first === -1) return null;
   let last = first;
   while (last + 1 < lines.length && isRow(lines[last + 1])) last++;
+
+  const before = lines.slice(0, first).join('\n') + (first > 0 ? '\n' : '');
+  const block = lines.slice(first, last + 1).join('\n');
+  const after = last + 1 < lines.length ? '\n' + lines.slice(last + 1).join('\n') : '';
+
+  return { before, block, after };
+}
+
+/**
+ * Locate an empty numbered-list stub — lines that are a number, a dot, and
+ * nothing else.
+ *
+ * Requiring the item to be empty is what makes this unambiguous: a real
+ * numbered list in the template's prose always has content after the number, so
+ * it can never be mistaken for a stub.
+ */
+export function extractListBlock(
+  text: string,
+): { before: string; block: string; after: string } | null {
+  const lines = text.split('\n');
+  const isStub = (l: string) => /^\s*\d+\.\s*$/.test(l);
+  const first = lines.findIndex(isStub);
+  if (first === -1) return null;
+  let last = first;
+  while (last + 1 < lines.length && (isStub(lines[last + 1]) || lines[last + 1].trim() === '')) {
+    if (isStub(lines[last + 1])) last++;
+    else break;
+  }
 
   const before = lines.slice(0, first).join('\n') + (first > 0 ? '\n' : '');
   const block = lines.slice(first, last + 1).join('\n');
