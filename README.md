@@ -45,6 +45,7 @@ Creates:
 - `~/saboteur/notes/` — Markdown notes directory
 - `~/saboteur/saboteur.config.json` — config
 - `~/saboteur/saboteur.secrets.json` — credentials template (gitignored)
+- `~/saboteur/templates/kaizen.md` — the weekly review template, yours to edit
 
 ## Quick reference
 
@@ -67,7 +68,11 @@ sab task move <id> active
 sab task done <id>
 sab standup                    Guided, slot-aware standup check-in (--slot to override inference)
 sab retro --scope project      Guided retro (project | feature | daily)
+sab kaizen                     Guided weekly review, driven by your kaizen template
+sab kaizen template edit       Edit the kaizen template in $EDITOR
 ```
+
+`sab kaizen` is a guided weekly review built from `~/saboteur/templates/kaizen.md`. The template is yours: it carries the questions, their wording, and the framing, and a review **never writes it** — answers are recorded, the template is not touched. Each note records the hash of the template version that produced it, so you can always tell which shape a given review came from. Section 3's project snapshots and section 5's bandwidth rows are generated from your contexts, so adding or retiring a repo needs no template edit, and last week's intentions are prefilled into this week's "did they hold?" table. Edit the template with `sab kaizen template edit` (or `--edit-template`) — that is the only CLI path that writes it.
 
 `sab standup` and `sab retro` are interactive: each recaps relevant context (shipped tasks, linked commits, blocked work) read-only, then asks a short question set and writes the answers as a note (tagged `standup` or `retro` respectively — find them later with `sab note find --tag standup` / `--tag retro`). Both always target a single context, so `--all` is rejected; use `--context <slug>` instead.
 
@@ -221,6 +226,8 @@ All git reads are local — no network access.
 ## Config
 
 `~/saboteur/saboteur.config.json` — paths, active context, stale task / stale branch thresholds, `repos_dir` (and optional `repos_dirs` for extra roots), `standup.slot_windows` (local-time windows used to infer the standup slot), and `retro.project_window_days` (lookback for `sab retro --scope project`, default `14`).
+
+`~/saboteur/templates/kaizen.md` — the Kaizen review template. Seeded on `sab init` and never overwritten afterwards, so hand edits survive upgrades. Its structure is carried by `<!-- sab:* -->` comments; see CLI.md for the annotation contract.
 `~/saboteur/saboteur.secrets.json` — credentials only (gitignored, never in config).
 
 ## Tests

@@ -4,17 +4,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Is
 
-**Saboteur POS** (Personal Operating System) is a CLI tool (`sab`) for task and note management with context scoping, dependency tracking, and a daily briefing. It is currently in the specification phase — implementation has not begun.
+**Saboteur POS** (Personal Operating System) is a CLI tool (`sab`) for task and note management with context scoping, dependency tracking, and a daily briefing. Phase 1 is implemented and in daily use; source lives in `src/`, with commands under `src/commands/`.
 
-The spec documents are authoritative:
+The spec documents are authoritative for behaviour:
 - `Docs/CoreSpec/Docs/LOGIC.md` — behavioral rules (read in full before implementing any feature)
 - `Docs/CoreSpec/Docs/PHASES.md` — build roadmap and done signals
-- `Docs/CoreSpec/Docs/SCHEMA.md` — database schema (currently empty, to be filled)
-- `Docs/CoreSpec/Docs/CLI.md` — command definitions (currently empty, to be filled)
+- `Docs/CoreSpec/Docs/SCHEMA.md` — database schema
+- `Docs/CoreSpec/Docs/CLI.md` — command definitions, flags, and error contracts
+- `Docs/feature-specs/<feature>/` — per-feature specs and task lists for work added since Phase 1
 
 ## Build Commands
 
-No implementation exists yet. When implementation begins, document build/lint/test commands here.
+```bash
+npm run dev -- <args>   # run the CLI from source (tsx)
+npm run build           # tsc + UI bundle
+npm test                # vitest run
+npm run test:watch      # vitest watch
+```
+
+Note: `tests/ui-file-watcher.test.ts` is timing-sensitive and fails intermittently on a clean tree.
 
 ## Architecture
 
@@ -58,6 +66,13 @@ No implementation exists yet. When implementation begins, document build/lint/te
 - `sab standup` — slot-aware daily check-in (`pre-work`/`wd-1`/`wd-2`/`wd-3`/`post-work`, inferred from `standup.slot_windows` in config or set via `--slot`). Recaps done-since-last-session tasks, linked commits, and blocked tasks before asking slot-specific questions.
 - `sab retro` — scope-aware reflection (`--scope project|feature|daily`).
 - Both write an editable note (`tags: ['standup']` / `tags: ['retro']`), discoverable via `sab note find --tag <tag>`.
+
+**Kaizen Weekly Review** (`Docs/feature-specs/kaizen/kaizen-spec.md`)
+- `sab kaizen` — guided weekly review driven by a user-owned template at `~/saboteur/templates/kaizen.md`, seeded on `sab init` and never overwritten.
+- **The template is the schema.** Structure is carried by `<!-- sab:* -->` HTML-comment directives; nothing is inferred from prose or heading text. That indirection is what lets a review reproduce template prose byte-for-byte into the note — the parser never interprets the words it preserves. See CLI.md for the annotation contract.
+- **A run never writes the template.** The engine under `src/kaizen/` (load → parse → validate → expand → render) is write-free; the only CLI write path is `sab kaizen template edit` / `--edit-template`. Never add a code path that lets a review modify the template — `tests/kaizen.test.ts` asserts the file's bytes *and* mtime are unchanged after a run.
+- Section 3's projects and section 5's bandwidth rows generate from `sab` contexts, not from headings in the template. Notes record `template_hash` so a review traces back to the version that produced it.
+- The conversational "tell me what to change, show a diff, then write" flow deliberately lives outside the CLI, in the `saboteur-kaizen-template` Claude Code skill — a model in the loop would violate the local-first invariant. The CLI must not depend on that skill existing.
 
 ### Phase Boundaries
 

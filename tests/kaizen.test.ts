@@ -1,3 +1,4 @@
+import { spawnSync } from 'child_process';
 import { createHash } from 'crypto';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import matter from 'gray-matter';
@@ -452,6 +453,23 @@ describe('sab kaizen', () => {
 
     it('seeds a template that exists to be edited', () => {
       expect(existsSync(templateIn(env.configPath))).toBe(true);
+    });
+
+    it('reports a missing $EDITOR instead of guessing one', () => {
+      // The shared helper always sets EDITOR, so this spawns directly with it
+      // removed — otherwise the documented error contract goes unverified.
+      const env2 = { ...process.env };
+      delete env2.EDITOR;
+      delete env2.VISUAL;
+
+      const result = spawnSync(
+        `${join(process.cwd(), 'node_modules/.bin/tsx')} ${join(process.cwd(), 'src/index.ts')} ` +
+          `kaizen template edit --config ${env.configPath}`,
+        { encoding: 'utf-8', shell: true, env: env2 },
+      );
+
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain('No $EDITOR set.');
     });
   });
 });

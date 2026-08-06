@@ -216,7 +216,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 15
 **Estimate:** 2
 **Notes:** `CLAUDE.md` is already stale about the project being pre-implementation; worth correcting that line while editing the file.
-**Done:** [ ]
+**Done:** [x] — `CLI.md` gains `sab kaizen`, `sab kaizen template edit`, and a full annotation-contract section (directive table, field types, `when` grammar, validation rules, placeholders). `README.md` covers the command, the template file, and the never-writes-it guarantee. `CLAUDE.md`'s "implementation has not begun" line is corrected, build commands are filled in (with the `ui-file-watcher` flake noted), and a Kaizen entry sits alongside Standup/Retro carrying the two rules a future contributor must not break. **Documented error strings were checked against the running CLI**, which surfaced one contract asserted nowhere: missing `$EDITOR`. The shared test helper always sets `EDITOR`, so a test now spawns without it — 31 tests in `tests/kaizen.test.ts`.
 
 ---
 
@@ -232,3 +232,19 @@ expand → render, all pure and independently testable) with the command shell i
   - ~~**FR29 partial writes**~~ — resolved in Task 18: the shared note writer now cleans up the file when the index write fails.
   - **FR28 vs. commit linking (open).** FR28 says a run must not mutate "any table other than `knowledge_index`", but showing linked commits requires `indexCommits`, which writes the derived `commits` cache. `sab standup` already does exactly this under an identically worded requirement, so the working interpretation is that refreshing a derived index does not count as mutating user data. Either FR28 should be amended to say so explicitly, or the recap must drop commit linking. Flagging rather than silently choosing.
   - **Minor spec/skill drift:** the `saboteur-kaizen-template` skill lists `kaizen.template_path` in its resolution order, but no FR defines that config field. The skill treats it as optional so nothing breaks, but Task 2 should either add the field or the skill line should be dropped.
+
+---
+
+## Completion
+
+All 19 tasks done, 50 points. **487 tests passing** across 37 files; typecheck clean.
+
+Delivered beyond the original breakdown:
+- **FR29 partial-write fix** (Task 18) — the shared note writer now removes the file when the index transaction fails, which also fixes `sab standup` and `sab retro`.
+- **Carry-forward ordering** (Task 14) — full-ISO `created_at` plus a `rowid` tie-break, since FR21's ordering ties for two same-week reviews.
+- **Elapsed-time ordering** (Task 17) — asked last, rendered in template position, because the template places it where the measurement would be zero.
+
+Still open for the spec owner:
+- **FR28 vs. commit linking.** Showing linked commits calls `indexCommits`, which writes the derived `commits` cache; FR28 forbids writing any table but `knowledge_index`. `sab standup` has always done this under identical wording. Recommend amending FR28 to exempt derived indexes.
+- **Author-facing HTML comments** in the template (`<!-- YYYY-MM-DD -->`, the per-context explainer) are reproduced into every note. Invisible when rendered, mildly noisy in raw markdown. Stripping them means deciding which comments are authoring and which are content — the prose interpretation FR9 forbids.
+- **`--week-of` still prompts.** It sets the field's default rather than skipping the question, per FR19 as written. A one-line change if skipping is preferred.
