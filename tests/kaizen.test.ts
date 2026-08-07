@@ -9,14 +9,17 @@ import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
 const templateIn = (configPath: string) => join(dirname(configPath), 'templates', 'kaizen.md');
 
 /**
- * Answers for a workspace whose only context is `inbox`.
+ * Answers for a workspace whose only context is `inbox`, run with `--week-of`.
  *
  * The repeat excludes inbox, so section 3 asks nothing and the bandwidth table
  * has only its two fixed rows — which keeps the script short enough to read.
+ * There is no `week_of` line: `--week-of` suppresses that prompt. A run without
+ * the flag must prepend `WEEK_OF_PROMPT`.
  */
-function baseAnswers(overrides: Partial<Record<string, string>> = {}): string {
+const WEEK_OF_PROMPT = '\n';
+
+function baseAnswers(): string {
   const lines = [
-    overrides.weekOf ?? '', // week_of — blank accepts the default
     '3', // energy
     '2', // focus
     'fragmented', // week_word
@@ -128,10 +131,23 @@ describe('sab kaizen', () => {
     });
 
     it('defaults week_of to a Monday when not given', () => {
-      sabConfig('kaizen', env, baseAnswers());
+      sabConfig('kaizen', env, WEEK_OF_PROMPT + baseAnswers());
       const fm = matter(readFileSync(join(env.notesPath, noteFiles(env)[0]), 'utf-8')).data;
       const day = new Date(`${fm.week_of}T00:00:00Z`).getUTCDay();
       expect(day).toBe(1);
+    });
+
+    it('takes the week from --week-of without asking for it', () => {
+      // No blank line for week_of: if the prompt still fired it would eat the
+      // energy answer and every later answer would land one question early.
+      const result = sabConfig('kaizen --week-of 2026-08-03', env, baseAnswers());
+      expect(result.code).toBe(0);
+      expect(result.stdout).not.toMatch(/week of.*\[2026-08-03\]/i);
+      const note = readFileSync(join(env.notesPath, noteFiles(env)[0]), 'utf-8');
+      expect(matter(note).data.week_of).toBe('2026-08-03');
+      expect(note).toMatch(/\*\*Week of:\*\*.*2026-08-03/);
+      // Answer alignment held: energy is 3, not the blank that used to precede it.
+      expect(note).toMatch(/\*\*Energy level this week \(1–5\):\*\*.*\b3\b/);
     });
 
     it('measures elapsed time rather than leaving it blank', () => {
@@ -147,7 +163,6 @@ describe('sab kaizen', () => {
 
       // Second run: section 2 now has one row, asking outcome and why.
       const second = [
-        '', // week_of
         '4', // energy
         '4', // focus
         'steady', // week_word — no followup, both scores are above 2
@@ -179,7 +194,6 @@ describe('sab kaizen', () => {
       // The second run asks two more questions than the first: the intentions
       // from run one now fill section 2, which wants an outcome and a why.
       const secondRun = [
-        '', // week_of
         '3',
         '2',
         'fragmented',
@@ -387,7 +401,7 @@ describe('sab kaizen', () => {
       );
 
       const secondRun = [
-        '', '3', '2', 'fragmented', 'Lost Tuesday',
+        '3', '2', 'fragmented', 'Lost Tuesday',
         'held', 'kept it', // section 2 now has last run's intention
         'Batch switches', '',
         '60', '40', 'Y',

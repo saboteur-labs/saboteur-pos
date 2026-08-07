@@ -63,7 +63,7 @@ The template is both the human-facing prose and the machine-readable schema. Str
 ### Review flow
 
 18. `sab kaizen` MUST run as a fully prompt-driven interactive flow (stdin/stdout), MUST NOT invoke `$EDITOR` for answers, and MUST prompt sections in template order (1 → 7).
-19. `sab kaizen` MUST default `Week of` to the Monday of the current local week and MUST accept `--week-of <YYYY-MM-DD>` to override.
+19. `sab kaizen` MUST default `Week of` to the Monday of the current local week, prompting for it. `--week-of <YYYY-MM-DD>` MUST override it and MUST suppress the prompt — a value given on the command line has already been stated, and re-asking it invites a typo that silently contradicts the flag.
 20. `sab kaizen` MUST measure elapsed wall-clock time for the run and offer it as the default for `Time spent on this review`, which the user may overwrite.
 21. Section 2 MUST pre-fill the `Intention` column with the intentions recorded in the most recent prior Kaizen note in scope (`ORDER BY created_at DESC LIMIT 1`, keyed off `tags` containing `kaizen`), prompting only for `Outcome` and `Why it did/didn't happen` per row. When no prior Kaizen note exists, Section 2 MUST render the table's `empty-message` and be skipped.
 22. Section 3 MUST generate one project subsection per non-`inbox` context, in stable order, rather than from headings in the template. Each subsection MUST use the `sab:repeat` block's field set, plus any `sab:extra` fields declared for that context slug (FR17).
@@ -72,7 +72,7 @@ The template is both the human-facing prose and the machine-readable schema. Str
 25. Section 5's bandwidth table MUST list one row per non-`inbox` context followed by the template's `sab:fixed-rows` entries, preserving those rows' wording.
 26. Section 5 MUST warn (not block) when the entered percentages do not sum to 100.
 27. Section 6 MUST accept up to the `sab:list` `max` intentions and MUST reject an additional one with a human-readable message stating the cap.
-28. `sab kaizen` MUST NOT mutate task state, dependency links, or any table other than `knowledge_index`.
+28. `sab kaizen` MUST NOT mutate task state, dependency links, or any table holding user-authored data. Derived indexes — caches rebuildable from disk or from git, namely `knowledge_index` and `commits` — are exempt: FR23's recap calls `indexCommits` to show linked commits, exactly as `sab standup` does. The rule this states is that a review records the week, it does not change it; refreshing a cache changes nothing a later `sab sync` would not.
 
 ### Persistence
 

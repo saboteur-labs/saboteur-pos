@@ -534,10 +534,11 @@ Run the guided weekly Kaizen review, driven by the user-owned template at `~/sab
 | `--edit-template` | — | opens `$EDITOR` and exits without running a review |
 | `--config <path>` | path to config file | default config path |
 
-**Question order.** Questions are asked in template order, sections 1 → 7, with two deliberate exceptions:
+**Question order.** Questions are asked in template order, sections 1 → 7, with three deliberate exceptions:
 
 - `time_spent` is asked **last** and rendered in its template position — it measures the review, so asking it second (where the template places it) would offer a default of zero.
 - A field carrying `when="..."` is asked only when its condition holds against answers already collected.
+- `--week-of` **suppresses** the `week_of` question rather than defaulting it; the value is echoed as `(from flag)`. Without the flag, the question is asked with the current Monday as its default.
 
 **Output:**
 

@@ -103,6 +103,8 @@ export async function runKaizen(options: KaizenOptions): Promise<void> {
       cutoffIso: `${weekOf}T00:00:00.000Z`,
       // Asked last, so the measurement covers the review the user just did.
       deferFields: ['time_spent'],
+      // Given as a flag, the week is settled — record it rather than re-ask it.
+      presetAnswers: options.weekOf ? { week_of: options.weekOf } : undefined,
       defaultFor: (id) => {
         if (id === 'week_of') return weekOf;
         if (id === 'time_spent') return elapsedSince(startedAt);

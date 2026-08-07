@@ -106,7 +106,7 @@ expand → render, all pure and independently testable) with the command shell i
 **Depends on:** 8
 **Estimate:** 2
 **Notes:** FR23. Reuses `doneSince`, `blockedInScope`, `commitsForTasks` from `src/commands/checkin/recap.ts` — pass the week-of date as the cutoff.
-**Done:** [x] — `src/commands/kaizen/recap.ts` + 10 tests. `doneSince` does take an arbitrary cutoff, so the risk noted against this task did not materialise. `parseRecapRequest` reads the `sab:repeat` `recap` attribute, so the template decides which parts are gathered. Empty contexts print "no movement recorded this week" rather than blank space. **Spec conflict to resolve (see Risks):** requesting `linked_commits` calls `indexCommits`, which writes the derived `commits` cache — FR28 as written forbids writing any table but `knowledge_index`.
+**Done:** [x] — `src/commands/kaizen/recap.ts` + 10 tests. `doneSince` does take an arbitrary cutoff, so the risk noted against this task did not materialise. `parseRecapRequest` reads the `sab:repeat` `recap` attribute, so the template decides which parts are gathered. Empty contexts print "no movement recorded this week" rather than blank space. **Spec conflict, since resolved:** requesting `linked_commits` calls `indexCommits`, which writes the derived `commits` cache; FR28 has been amended to exempt derived indexes.
 
 ---
 
@@ -244,7 +244,9 @@ Delivered beyond the original breakdown:
 - **Carry-forward ordering** (Task 14) — full-ISO `created_at` plus a `rowid` tie-break, since FR21's ordering ties for two same-week reviews.
 - **Elapsed-time ordering** (Task 17) — asked last, rendered in template position, because the template places it where the measurement would be zero.
 
+Resolved after the breakdown:
+- **FR28 vs. commit linking** — FR28 amended to exempt derived indexes (`knowledge_index`, `commits`), naming the rule it actually encodes: a review records the week, it does not change it. Refreshing a cache changes nothing a later `sab sync` would not. This retroactively legitimises what `sab standup` has always done.
+- **`--week-of` now suppresses the prompt** rather than defaulting it — FR19 amended, `presetAnswers` added to `runQuestions`. The value is echoed as `(from flag)`. Re-asking a value already stated on the command line only creates the chance to type something that silently contradicts it.
+
 Still open for the spec owner:
-- **FR28 vs. commit linking.** Showing linked commits calls `indexCommits`, which writes the derived `commits` cache; FR28 forbids writing any table but `knowledge_index`. `sab standup` has always done this under identical wording. Recommend amending FR28 to exempt derived indexes.
 - **Author-facing HTML comments** in the template (`<!-- YYYY-MM-DD -->`, the per-context explainer) are reproduced into every note. Invisible when rendered, mildly noisy in raw markdown. Stripping them means deciding which comments are authoring and which are content — the prose interpretation FR9 forbids.
-- **`--week-of` still prompts.** It sets the field's default rather than skipping the question, per FR19 as written. A one-line change if skipping is preferred.

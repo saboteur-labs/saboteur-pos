@@ -44,6 +44,14 @@ export interface RunOptions extends PromptOptions {
    * asked, not where it appears.
    */
   deferFields?: string[];
+  /**
+   * Answers already supplied on the command line, by field id.
+   *
+   * These are recorded and *not* prompted. A value stated as a flag has been
+   * stated; re-asking it only creates the chance to type something that
+   * silently contradicts it.
+   */
+  presetAnswers?: Record<string, string>;
 }
 
 export interface RunResult {
@@ -119,6 +127,15 @@ async function askField(
   // A conditional prompt is only asked when its condition holds against what has
   // already been answered; otherwise it is left unasked, not blank-answered.
   if (node.when && !evaluateWhen(parseWhen(node.when), (field) => result.answers[keyOf(field)])) {
+    return;
+  }
+
+  // Keyed on the bare id but only honoured where the key *is* the bare id, so a
+  // preset can never leak into a repeat item that happens to reuse the id.
+  const preset = key === node.id ? options.presetAnswers?.[node.id] : undefined;
+  if (preset !== undefined) {
+    result.answers[key] = preset;
+    options.print(`${c.muted(`  ${labelFor(node)}: ${preset} (from flag)`)}\n`);
     return;
   }
 
