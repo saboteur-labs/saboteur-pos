@@ -83,7 +83,9 @@ describe('loadKaizenTemplate', () => {
       const { frontmatter } = load();
       expect(frontmatter.template).toBe('kaizen');
       expect(frontmatter.schema).toBe(SUPPORTED_SCHEMA);
-      expect(frontmatter.template_version).toBe(1);
+      // The exact version is pinned in tests/kaizen.test.ts, where it has to
+      // reach the note's frontmatter; here the point is only that it parses.
+      expect(Number.isInteger(frontmatter.template_version)).toBe(true);
     });
 
     it('rejects a file with no frontmatter block', () => {

@@ -1,6 +1,6 @@
 ---
 template: kaizen
-template_version: 1
+template_version: 2
 schema: 1
 ---
 
@@ -8,11 +8,11 @@ schema: 1
 
 <!-- sab:field id="week_of" type="date" default="monday-of-current-week" -->
 
-**Week of:** <!-- YYYY-MM-DD -->
+**Week of:**
 
 <!-- sab:field id="time_spent" type="duration" default="measured" -->
 
-**Time spent on this review:** <!-- e.g. 45m -->
+**Time spent on this review:**
 
 ---
 
@@ -99,9 +99,9 @@ For each project, answer only what changed this week. Skip sections where nothin
 - **Artist profiles this week (new / claimed):**
 
 <!-- sab:extra context="getwrite-development" -->
-<!-- sab:field id="export_milestone" type="text" -->
+<!-- sab:field id="export_milestone" type="text" label="Export milestone status (e.g. PDF working, Word in progress)" -->
 
-- **Export milestone status:** <!-- e.g. "PDF working, Word in progress" -->
+- **Export milestone status:**
 
 <!-- sab:extra context="saboteur-pos" -->
 <!-- sab:field id="release_signal" type="text" -->

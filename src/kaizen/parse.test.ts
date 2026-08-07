@@ -43,16 +43,20 @@ describe('tokenize', () => {
   });
 
   it('treats non-sab HTML comments as prose, not structure', () => {
-    // The template uses `<!-- YYYY-MM-DD -->` and `<!-- e.g. 45m -->` as inline
-    // human hints; they are part of the document, not directives.
-    const tokens = tokenize(BODY);
+    // Tested against a fixture rather than the shipped template: the shipped
+    // one no longer carries inline comments, but a user's may — only `sab:`
+    // makes a comment structural, and everything else is theirs to keep.
+    const body = '**Week of:** <!-- YYYY-MM-DD -->\n\n<!-- sab:field id="x" type="text" -->\n';
+    const tokens = tokenize(body);
     const directiveNames = tokens
       .filter((t) => t.kind === 'directive')
       .map((t) => (t.kind === 'directive' ? t.directive.name : ''));
-    expect(directiveNames).not.toContain('YYYY-MM-DD');
-    const prose = tokens.filter((t) => t.kind === 'prose').map((t) => (t.kind === 'prose' ? t.text : '')).join('');
+    expect(directiveNames).toEqual(['field']);
+    const prose = tokens
+      .filter((t) => t.kind === 'prose')
+      .map((t) => (t.kind === 'prose' ? t.text : ''))
+      .join('');
     expect(prose).toContain('<!-- YYYY-MM-DD -->');
-    expect(prose).toContain('<!-- e.g. 45m -->');
   });
 
   it('keeps the long explanatory comment block as prose', () => {
@@ -135,6 +139,20 @@ describe('parse — shipped template', () => {
       'next-intentions',
       'honest-note',
     ]);
+  });
+
+  /**
+   * A format hint written as a comment is reproduced verbatim into every note,
+   * between a label and its answer. It is also redundant: `promptField` derives
+   * the same hint from the declared type, and a `label` attribute carries an
+   * example where the type cannot. Prose is never stripped — FR4 — so the only
+   * place to keep this honest is here, in what we ship.
+   */
+  it('carries no inline format hints — the prompt derives them from the type', () => {
+    const inlineComments = BODY.split('\n')
+      .filter((line) => /\S.*<!--/.test(line) && !line.includes('<!-- sab:'))
+      .map((line) => line.trim());
+    expect(inlineComments).toEqual([]);
   });
 
   it('carries section titles and minutes', () => {

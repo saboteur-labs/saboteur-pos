@@ -100,7 +100,7 @@ describe('sab kaizen', () => {
       const fm = matter(readFileSync(join(env.notesPath, file), 'utf-8')).data;
       expect(fm.tags).toEqual(['kaizen']);
       expect(fm.week_of).toBe('2026-08-03');
-      expect(fm.template_version).toBe(1);
+      expect(fm.template_version).toBe(2);
       expect(fm.template_hash).toMatch(/^[0-9a-f]{64}$/);
       expect(fm.intentions).toEqual(['Ship kaizen']);
     });
