@@ -27,6 +27,7 @@ import { runSync } from './commands/sync.js';
 import { runBriefing } from './commands/briefing.js';
 import { runStandup } from './commands/standup.js';
 import { runRetro } from './commands/retro.js';
+import { runKaizen } from './commands/kaizen.js';
 import { runGitList } from './commands/git/list.js';
 import { runUi, runUiStop } from './commands/ui.js';
 
@@ -49,6 +50,8 @@ Commands:
   sab briefing --weekly        7-day shipped/stalled/repo-activity report
   sab standup [--slot <slot>]  Guided standup check-in (slot-aware Q&A)
   sab retro --scope <s>        Guided retro (project | feature | daily)
+  sab kaizen                   Guided weekly review from your kaizen template
+  sab kaizen template edit     Edit the kaizen template in $EDITOR
   sab sync                     Rebuild knowledge index from disk
   sab git list                 List valid repos under repos_dir with their branches
 
@@ -327,6 +330,29 @@ program
   .option('--all', 'Not supported for retro — will error')
   .option('--config <path>', 'Path to config file')
   .action((options) => runRetro(options));
+
+// ── sab kaizen ───────────────────────────────────────────────────────────────
+const kaizen = program
+  .command('kaizen')
+  .description('Run the guided weekly Kaizen review')
+  .option('--context <slug>', 'Override active context (the note is filed here)')
+  .option('--week-of <date>', 'YYYY-MM-DD (defaults to Monday of the current week)')
+  .option('--template <path>', 'Use an alternate template file for this run')
+  .option('--edit-template', 'Open the template in $EDITOR and exit without running a review')
+  .option('--all', 'Not supported for kaizen — will error')
+  .option('--config <path>', 'Path to config file')
+  .action((options, cmd) => runKaizen(cmd.optsWithGlobals()));
+
+kaizen
+  .command('template')
+  .description('Manage the Kaizen template')
+  .command('edit', { isDefault: true })
+  .description('Open the Kaizen template in $EDITOR')
+  .option('--template <path>', 'Edit an alternate template file')
+  .option('--config <path>', 'Path to config file')
+  // optsWithGlobals, not opts: `--config` after a nested subcommand is parsed by
+  // the parent `kaizen` command, so the subcommand's own opts come back empty.
+  .action((_options, cmd) => runKaizen({ ...cmd.optsWithGlobals(), editTemplate: true }));
 
 // ── sab git ──────────────────────────────────────────────────────────────────
 const gitCmd = program.command('git').description('Inspect git state visible to Saboteur');

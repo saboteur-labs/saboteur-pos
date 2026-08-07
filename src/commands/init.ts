@@ -9,6 +9,7 @@ import {
   saveConfig,
 } from '../config.js';
 import { getDb } from '../db/index.js';
+import { seedKaizenTemplate } from '../kaizen/seed.js';
 import { c } from '../colors.js';
 
 function now(): string {
@@ -66,12 +67,17 @@ export function runInit(options: { config?: string }): void {
   // Step 7: Add secrets file to .gitignore in workspace root
   ensureGitignore(secretsPath);
 
-  // Step 8: Print confirmation
+  // Step 8: Seed the Kaizen template (no-op when the user already has one —
+  // this is also how workspaces created before the feature get backfilled)
+  const kaizen = seedKaizenTemplate(configPath);
+
+  // Step 9: Print confirmation
   process.stdout.write(
     c.green(`Initialized Saboteur workspace.\n`) +
       `  DB:     ${c.muted(dbPath)}\n` +
       `  Notes:  ${c.muted(notesPath)}\n` +
-      `  Config: ${c.muted(configPath)}\n`,
+      `  Config: ${c.muted(configPath)}\n` +
+      `  Kaizen: ${c.muted(kaizen.path)}${kaizen.seeded ? '' : c.muted(' (existing)')}\n`,
   );
 }
 

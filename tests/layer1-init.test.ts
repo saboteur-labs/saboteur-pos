@@ -1,6 +1,10 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
+
+const kaizenTemplateIn = (configPath: string) =>
+  join(dirname(configPath), 'templates', 'kaizen.md');
 
 describe('Layer 1 — Init + Status', () => {
   let env: TestEnv;
@@ -38,6 +42,37 @@ describe('Layer 1 — Init + Status', () => {
     expect(config.briefing.stale_task_days).toBe(3);
     expect(config.briefing.provider_timeout_ms).toBe(2000); // Phase 2c stub present
     expect(config.repos_dir).toBeDefined(); // Phase 2a stub present
+  });
+
+  it('sab init seeds the Kaizen template byte-identically to the shipped asset', () => {
+    const seeded = kaizenTemplateIn(env.configPath);
+    expect(existsSync(seeded)).toBe(true);
+    const shipped = readFileSync(join(process.cwd(), 'templates/kaizen.md'));
+    expect(readFileSync(seeded).equals(shipped)).toBe(true);
+  });
+
+  it('sab init never overwrites a hand-edited Kaizen template', () => {
+    const seeded = kaizenTemplateIn(env.configPath);
+    const edited = readFileSync(seeded, 'utf-8').replace('Three maximum.', 'Two maximum.');
+    writeFileSync(seeded, edited, 'utf-8');
+
+    const result = sabConfig('init', env);
+
+    expect(result.code).toBe(0);
+    expect(readFileSync(seeded, 'utf-8')).toBe(edited);
+    expect(result.stdout).toContain('(existing)');
+  });
+
+  it('sab init backfills the Kaizen template for a workspace created without one', () => {
+    // A workspace that predates the feature: config and DB exist, templates dir does not.
+    const seeded = kaizenTemplateIn(env.configPath);
+    rmSync(dirname(seeded), { recursive: true, force: true });
+    expect(existsSync(seeded)).toBe(false);
+
+    const result = sabConfig('init', env);
+
+    expect(result.code).toBe(0);
+    expect(existsSync(seeded)).toBe(true);
   });
 
   it('commits table exists with expected columns and indexes', async () => {
