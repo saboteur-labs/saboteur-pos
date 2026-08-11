@@ -1,6 +1,6 @@
 {
   "skill_name": "saboteur-pos",
-  "note": "Reusable eval set for the saboteur-pos skill, grouped by increment via the per-eval `increment` field. Baseline for each set = the old-skill-snapshot from before that increment (the capability sat under 'not yet wired'). Note evals (0-3) cover note capture; briefing evals (4-7) cover the briefing-as-action-hub; task evals (8-11) cover standalone task management (create, state machine, dependencies, view selection). Some evals set `cwd` because context resolution depends on the working repo. Task evals are run in no-mutate mode (the runner is told to form the exact sab command and stop short of executing any task/note write) so they never touch live data; grading is from the command the agent produces plus its offer behavior.",
+  "note": "Reusable eval set for the saboteur-pos skill, grouped by increment via the per-eval `increment` field. Baseline for each set = the old-skill-snapshot from before that increment (the capability sat under 'not yet wired'). Note evals (0-3) cover note capture; briefing evals (4-7) cover the briefing-as-action-hub; task evals (8-11) cover standalone task management (create, state machine, dependencies, view selection). Some evals set `cwd` because context resolution depends on the working repo. Task evals are run in no-mutate mode (the runner is told to form the exact sab command and stop short of executing any task/note write) so they never touch live data; grading is from the command the agent produces plus its offer behavior. Task-list evals (12-15) cover the tasks.md import increment: recognizing an un-imported task list, the just-in-time check when work on a listed task begins, the POS-line writeback that makes re-import idempotent, and not flooding the briefing's Blocked section on import. These are run in no-mutate mode too.",
   "evals": [
     {
       "id": 0,
@@ -173,6 +173,67 @@
         {"text": "Scopes the read to getwrite-development with --context explicitly (resolves the repo to its context first)"},
         {"text": "Makes a concrete recommendation of what to work on rather than only restating the list"},
         {"text": "Does not run any state-changing sab command (read-only)"}
+      ]
+    },
+    {
+      "id": 12,
+      "increment": "tasklist",
+      "name": "import-after-breakout",
+      "prompt": "ok that task list looks right. lets get started on it",
+      "cwd": "/Users/jedaisaboteur/Repositories/saboteur-pos",
+      "expected_output": "Before diving into implementation, notices the tasks.md has no **POS:** lines and offers in one line to import the tasks into saboteur-pos, batching the whole list into a single yes rather than asking per task. Does not silently create tasks, and does not turn the offer into a gate that blocks starting work.",
+      "files": [],
+      "assertions": [
+        {"text": "Offers to import the task list into sab rather than starting implementation with the tasks untracked"},
+        {"text": "Asks once for the whole batch (a single yes covers all tasks), not per-task"},
+        {"text": "Does not create any task without the user agreeing first"},
+        {"text": "Keeps the offer to roughly a line — does not enumerate every task or stall the actual work behind it"}
+      ]
+    },
+    {
+      "id": 13,
+      "increment": "tasklist",
+      "name": "work-begins-untracked-task",
+      "prompt": "lets do task 4",
+      "cwd": "/Users/jedaisaboteur/Repositories/saboteur-pos",
+      "expected_output": "Checks whether task 4 is tracked (looks for its **POS:** line) BEFORE starting the work. Finding none, says so briefly and folds the fix into the same beat — offering to add it (and the rest of the list) and mark it active. Does not begin implementing an untracked task without at least raising it.",
+      "files": [],
+      "assertions": [
+        {"text": "Checks whether task 4 already exists in sab before beginning the work, not after"},
+        {"text": "Surfaces that the task is untracked and offers to create it, in about a line"},
+        {"text": "Offers to move the task to active as part of the same beat rather than as a separate round-trip"},
+        {"text": "Does not re-pitch or interrogate — if declined, gets on with the work"}
+      ]
+    },
+    {
+      "id": 14,
+      "increment": "tasklist",
+      "name": "import-writes-pos-line-back",
+      "prompt": "yes, import them all into sab",
+      "cwd": "/Users/jedaisaboteur/Repositories/saboteur-pos",
+      "expected_output": "Resolves context, reads the existing task list, creates the missing tasks with --context and an --effort mapped from the story-point estimate, then writes each returned task_ id back into tasks.md as a single **POS:** line directly above that task's **Done:** line. Skips tasks already marked **Done:** [x]. Makes no other edit to the file — no reflowing, renumbering, or field reordering.",
+      "files": [],
+      "assertions": [
+        {"text": "Passes --context \"$SLUG\" on every `sab task add` (resolves the repo to its context first)"},
+        {"text": "Maps the story-point estimate onto --effort (1/2/3/5/8 → xs/s/m/l/xl) rather than inventing a priority or energy the task list doesn't carry"},
+        {"text": "Writes the created task_ ID back into tasks.md as a **POS:** line above the task's **Done:** line"},
+        {"text": "Skips tasks already checked off as **Done:** [x] and says how many it skipped"},
+        {"text": "Makes no unrelated edits to tasks.md (no reflowed prose, renumbered tasks, or reordered fields)"}
+      ]
+    },
+    {
+      "id": 15,
+      "increment": "tasklist",
+      "name": "import-deps-stay-in-backlog",
+      "prompt": "make sure the dependencies between those tasks are recorded too",
+      "cwd": "/Users/jedaisaboteur/Repositories/saboteur-pos",
+      "expected_output": "Records each **Depends on:** relation with `sab task link <blocker_id> --blocks <dependent_id>` — dependency's ID first — after every task has an ID. Leaves the dependents in backlog and does NOT run `sab task block` on them, so the briefing's Blocked section isn't flooded with work that simply hasn't started.",
+      "files": [],
+      "assertions": [
+        {"text": "Uses `sab task link <blocker> --blocks <dependent>` with the blocker's ID first (does not flip the direction)"},
+        {"text": "Does NOT run `sab task block` on the dependent tasks — they stay in backlog"},
+        {"text": "Runs the link pass only after all tasks exist and have IDs"},
+        {"text": "Passes no --context on the by-ID link calls"}
       ]
     }
   ]

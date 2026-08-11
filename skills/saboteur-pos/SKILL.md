@@ -2,7 +2,7 @@
 name: saboteur-pos
 description: >-
   Drive Saboteur POS (the `sab` CLI) for personal tasks, notes, and a daily
-  briefing. Five capabilities are actively guided: (1) putting you in the RIGHT
+  briefing. Six capabilities are actively guided: (1) putting you in the RIGHT
   context — every `sab` action is context-scoped, so it maps the current git
   repository to its Saboteur context and switches to it; (2) running the daily
   briefing as an action hub — it scopes the briefing to the right context (or
@@ -19,7 +19,13 @@ description: >-
   question asked, moving them through the state machine (it knows the legal
   transitions, e.g. that a task must pass through review before it can be done),
   and recording blocking dependencies, always offering before a state change
-  rather than acting silently. Use this skill whenever you start working in a
+  rather than acting silently; and (6) importing a `tasks.md` task list into POS
+  — Saboteur features are built from a written task list, so it offers to import
+  the tasks POS is missing, and when work on a listed task begins it makes sure
+  that task is tracked first. Use this skill whenever you are about to start or
+  implement a task from a task list or spec ("let's do task 4", "next task",
+  "implement this feature"), have just had a task list written or broken into
+  tasks, start working in a
   repository, are about to commit, want a briefing or to know what to work on,
   want to jot/save/capture/record a note, thought, or insight, want to add or
   create a task, move a task or mark it done/blocked/in review, see your backlog
@@ -46,7 +52,7 @@ deterministically with a script.
 
 ## Current scope
 
-Five capabilities, all built on the same foundation — knowing which context the
+Six capabilities, all built on the same foundation — knowing which context the
 current repo belongs to:
 
 1. **Resolve the current repository to its context and switch to it** (below).
@@ -64,6 +70,9 @@ current repo belongs to:
 5. **Manage tasks** — create them in the right context, list the view that
    answers the question, move them through the state machine, and record
    blocking dependencies ([Managing tasks](#managing-tasks)).
+6. **Import a written task list** — when a `tasks.md` exists, get its tasks into
+   POS instead of letting the plan and the ledger drift apart
+   ([Working from a task list](#working-from-a-task-list)).
 
 ### Not yet wired into this skill
 
@@ -456,6 +465,160 @@ it's gone. Treat it as irreversible: confirm before running even if the user
 sounded sure. If the task has dependency links, delete refuses unless you add
 `--force` (which also tears down those links); surface that rather than reflexively
 forcing, since the guard is usually catching something real.
+
+## Working from a task list
+
+Saboteur features are implemented from a written task list — a `tasks.md`
+produced by `saboteur-break-into-tasks` and conforming to the `sab.tasks/1`
+schema. That file is the **plan**; POS is the **ledger**. When the two drift
+apart, the ledger is the one that loses: the briefing shows a context with
+nothing moving while the user is three days into a feature, "what should I work
+on" has nothing to answer with, and commits land with no task to link to.
+
+The friction is real and worth beating: nobody wants to hand-type 19
+`sab task add` calls. But the task list is a *structured* source — titles,
+dependencies, estimates, and a done checkbox are all already there. So don't
+treat an un-imported task list as normal. When you see one, get it into POS.
+
+### Recognising a task list
+
+Look for, in this order:
+
+- `Docs/feature-specs/<feature>/tasks.md` or
+  `Docs/feature-specs/<feature>/<feature>-tasks.md` (this repo's layout),
+- `specs/features/<slug>/tasks.md` (the `sab.tasks/1` conventional path).
+
+The shape is one `### Task N: <title>` block per task, each with `**What:**`,
+`**Files:**`, `**Done when:**`, `**Depends on:**`, `**Estimate:**`, an optional
+`**Notes:**`, and a `**Done:** [ ]` checkbox.
+
+### The join: a `**POS:**` line
+
+An imported task carries its `sab` ID back in the file, as one line directly
+above `**Done:**`:
+
+```
+**Estimate:** 3
+**POS:** task_a1b2c3d4
+**Done:** [ ]
+```
+
+That line is what makes everything else work. It's how a re-import becomes a
+diff instead of a pile of duplicates, and it's how commit-linking gets an exact
+ID from the file you're already looking at instead of guessing from titles. A
+task list without it can only be matched by title, which breaks the moment
+someone reworders a task.
+
+**This is schema-safe** — verified against the real validator: a task list with
+`**POS:**` lines still passes
+`check-outputs.js --doc <path> --schema sab.tasks/1`. The extra field is parsed
+as its own labeled field and dropped (the schema doesn't declare it), so it
+doesn't contaminate `**Notes:**` and doesn't disturb the `**Done:**` checkbox
+that `saboteur-feature-orchestrator` gates on. Keep it to exactly that: one
+added line per task. Don't reflow prose, renumber tasks, reorder fields, or
+touch anything else in the file — a task list is an input to an automated
+runner, and gratuitous churn in it is a real cost.
+
+### Trigger 1 — a task list was just written
+
+When `saboteur-break-into-tasks` (or the user by hand) produces a task list,
+that's the moment the whole plan exists in one place. Offer the import in one
+line and take a single yes for the whole batch:
+
+> "That's 19 tasks. Want me to import them into `saboteur-pos` so the briefing
+> tracks them?"
+
+### Trigger 2 — work on a listed task begins
+
+This is the one that actually catches the misses: a task list that was never
+imported, or a task added to the file after the last import. Whenever the user
+points at a specific task to start work on it — *"let's do task 4,"* *"next
+task,"* *"start on the parser one,"* or an implementation skill/agent being
+pointed at a task — check that the task is tracked **before the work starts**,
+not after.
+
+1. Read the task's `**POS:**` line. If it's there, the task exists — offer to
+   move it to `active` (`sab task move <id> active`) and get on with the work.
+2. If there's no `**POS:**` line, the task isn't tracked. Say so in one line and
+   fold the fix into the same beat: *"Task 4 isn't in POS — want me to add it
+   (and the rest of the list while I'm at it) and mark it active?"*
+
+Keep this to a line. The user asked to do work, not to do admin; the offer rides
+along with starting the task rather than becoming a gate in front of it. If they
+decline, start the work — don't re-pitch it every task.
+
+### Doing the import
+
+**Step 1 — resolve context and read what's already there.**
+
+```bash
+SLUG=$(python3 "$CLAUDE_SKILL_DIR/scripts/resolve_context.py" slug)
+sab task list --context "$SLUG"
+```
+
+(That lists the context's **open** tasks — `done` ones don't appear. That's the
+right list here, since the import skips completed tasks anyway. Note `--all`
+would widen to all *contexts*, not all states; you don't want it.)
+
+**Step 2 — work out what's missing.** A task in the file needs importing if it
+has no `**POS:**` line *and* no obvious title match in the list. Skip tasks
+already marked `**Done:** [x]` — importing completed work just to close it adds
+noise to the ledger and nothing to the briefing. Say how many you're skipping
+and why.
+
+**Step 3 — create each missing task**, mapping the file's fields onto `sab`'s:
+
+| Task list | `sab task add` |
+| --- | --- |
+| `### Task N: <title>` | the title (trim it if it's long — POS titles read best short) |
+| `**Estimate:** 1 / 2 / 3 / 5 / 8` | `--effort xs / s / m / l / xl` |
+| `**Depends on:**` | a `sab task link` pass, after every task exists |
+| everything else | leave it in the file — POS doesn't need a copy |
+
+```bash
+sab task add "<title>" --context "$SLUG" --effort m
+```
+
+which prints `Created task task_a1b2c3d4: "<title>"` — capture that ID for the
+writeback. Leave `--priority` at its default and `--energy` unset unless the
+user has said something that implies them; the task list doesn't carry either,
+and guessing fills the briefing's sort order with noise. Everything lands in
+`backlog`, which is correct — an imported plan isn't work in flight.
+
+**Step 4 — record dependencies**, once every task has an ID. `**Depends on:** 5`
+on task 7 means task 5 blocks task 7, so it's the *dependency's* ID that goes
+first (see [Recording dependencies](#recording-dependencies) — the direction is
+the easy thing to flip):
+
+```bash
+sab task link <id-of-task-5> --blocks <id-of-task-7>
+```
+
+**Leave the dependents in `backlog` — do not `sab task block` them.** `link`
+records the relationship without touching state, which is exactly what you want:
+a 19-task import would otherwise dump 15 tasks into the briefing's Blocked
+section, where "blocked" should mean *something is wrong*, not *not started
+yet*. The cost is that a dependent sitting in `backlog` won't auto-unblock when
+its blocker is marked done (auto-unblock only fires on tasks actually in the
+`blocked` state) — that's fine, since a backlog task was never waiting to wake
+up.
+
+**Step 5 — write the IDs back** into the file, one `**POS:**` line per imported
+task, directly above its `**Done:**` line.
+
+**Step 6 — report the result in a line or two**: how many imported, how many
+skipped as already-done or already-tracked, and how many dependency links were
+recorded. Don't enumerate all 19.
+
+### Re-importing
+
+Running the import again on a list that's already been imported is safe and
+should be cheap: tasks with a `**POS:**` line are already tracked, so the only
+work is whatever's new. That's the point of the writeback — after a task list
+gets extended mid-feature (which happens), a second import picks up exactly the
+additions. If a `**POS:**` ID doesn't resolve (`sab task view <id>` finds
+nothing — the task was deleted, or the DB was rebuilt), say so rather than
+silently re-creating it; the user may want to know their ledger lost something.
 
 ## Linking commits to tasks
 

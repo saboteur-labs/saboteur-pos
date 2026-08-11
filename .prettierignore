@@ -1,0 +1,24 @@
+# Skill eval sets are hand-maintained and kept in a compact style: one
+# {"text": "..."} assertion per line. Prettier's default JSON printer expands
+# each of those onto three lines, which turns a four-eval addition into a
+# ~300-line diff and destroys blame on the file. Formatting here is deliberate.
+skills/*/evals/*.json
+
+# The Kaizen template is byte-sensitive. `template_hash` on every kaizen note is
+# a sha256 over the file's raw bytes (src/kaizen/loader.ts), and a review
+# reproduces template prose into the note byte-for-byte. Prettier collapses the
+# bandwidth table's column padding, which changes the hash — so notes stop
+# tracing back to the template version that produced them, and the re-padded
+# table lands in the review itself.
+templates/kaizen.md
+
+# Task lists are inputs to an automated runner (the `sab.tasks/1` schema, read by
+# saboteur-feature-orchestrator and the tasks.md import). Prettier inserts blank
+# lines between fields and rewrites emphasis (*later* -> _later_) inside prose
+# that is meant to be preserved as written.
+Docs/feature-specs/**/tasks.md
+Docs/feature-specs/**/*-tasks.md
+
+# Build output
+dist/
+ui/dist/
