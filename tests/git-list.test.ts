@@ -173,4 +173,42 @@ describe('sab git list', () => {
     expect(result.stdout).toContain('broken');
     expect(result.stdout).toContain('read-error');
   });
+
+  describe('--include-worktrees (FR-17)', () => {
+    function repoWithAgentBranches(): string {
+      const p = join(dirname(env.configPath), 'alpha');
+      mkdirSync(p);
+      git(p, 'init -q -b main');
+      makeCommit(p, 'a.txt', '1', 'initial');
+      git(p, 'branch worktree-agent-a101e1f675f5dc712');
+      git(p, 'branch worktree-agent-a2cf0deef802e26a3');
+      git(p, 'branch feat/ordinary');
+      return p;
+    }
+
+    it('leaves the default output unchanged when agent branches exist', () => {
+      repoWithAgentBranches();
+      const out = sabConfig('git list', env).stdout;
+      expect(out).toContain('alpha');
+      expect(out).not.toContain('worktree-agent-');
+    });
+
+    it('lists matching branches under their repo with the flag', () => {
+      repoWithAgentBranches();
+      const out = sabConfig('git list --include-worktrees', env).stdout;
+      expect(out).toContain('worktree-agent-a101e1f675f5dc712');
+      expect(out).toContain('worktree-agent-a2cf0deef802e26a3');
+      expect(out).not.toContain('feat/ordinary');
+    });
+
+    it('adds no lines for a repo without matching branches', () => {
+      const p = join(dirname(env.configPath), 'beta');
+      mkdirSync(p);
+      git(p, 'init -q -b main');
+      makeCommit(p, 'b.txt', '1', 'initial');
+      const plain = sabConfig('git list', env).stdout;
+      const flagged = sabConfig('git list --include-worktrees', env).stdout;
+      expect(flagged).toBe(plain);
+    });
+  });
 });

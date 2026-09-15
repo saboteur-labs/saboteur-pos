@@ -2,8 +2,8 @@ import type Database from 'better-sqlite3';
 import type { Config } from '../config.js';
 import { upsertCommit, type CommitInput } from '../db/commits.js';
 import { listContexts, repoEntries } from '../db/contexts.js';
-import { getReposDirs } from '../config.js';
-import { attributeSubContext, type SubContextRule } from './globs.js';
+import { getReposDirs, getWorktreeBranchPatterns } from '../config.js';
+import { attributeSubContext, isWorktreeBranch, type SubContextRule } from './globs.js';
 import { discoverAllRepos } from './discover.js';
 import { extractTaskIds } from './parse.js';
 import {
@@ -77,8 +77,17 @@ export function indexCommits(
         // Only pay for the changed-file scan when this repo has sub-areas.
         const filesBySha = rules ? getChangedFilesByCommit(repo.path, since) : null;
 
+        // `commits.branch` records the first branch a commit is seen on, so
+        // scan ordinary branches before worktree-agent ones: a commit on both
+        // is then attributed to the ordinary branch and is not hidden when the
+        // briefing filters worktree branches out (FR-16).
+        const worktreePatterns = getWorktreeBranchPatterns(config);
         const branches = listBranches(repo.path);
-        const refs = branches.length > 0 ? branches : [undefined];
+        const ordered = [
+          ...branches.filter((b) => !isWorktreeBranch(b, worktreePatterns)),
+          ...branches.filter((b) => isWorktreeBranch(b, worktreePatterns)),
+        ];
+        const refs = ordered.length > 0 ? ordered : [undefined];
 
         for (const ref of refs) {
           const commits = getCommitsSince(repo.path, since, ref);

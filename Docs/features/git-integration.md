@@ -213,7 +213,33 @@ Commits older than the horizon (60 days) are not indexed. If you reference a tas
   Skipped 1 repo: archive.git (bare)
 ```
 
-Each working repo gets a header line with branch and dirty flag, plus up to 5 of its most recent commits linked to tasks in the active context.
+Each working repo gets a header line with branch and dirty flag, plus its most recent commits linked to tasks in the active context — up to `briefing.repo_state_max_commits` (default `5`).
+
+Branches matching `git.worktree_branch_patterns` (default `["worktree-agent-*"]`) are left out of both the commit list and Stale Branches, so branches left behind by agent worktrees don't crowd the briefing. `sab briefing --include-worktrees` shows them. The filter applies to display only: those commits are still indexed and still appear under `sab task view`.
+
+Below Repo State comes **Landed** — what actually reached each repo's default branch:
+
+```
+── Landed (2026-09-14 → 2026-09-20) ─────────────────
+  varsentry  (main)
+    2f180cd  2026-09-14  #200  Merge pull request #200 from org/feat/trash-ui  → Trash UI
+    69b9d36  2026-09-13        docs(specs): mark FR-43 shipped  → Ship FR-43
+    +3 more
+
+  Skipped 1 repo: legacy (no-default-branch)
+```
+
+One row per first-parent commit on the default branch, newest first. A merge row's tasks come from the commits it brought in; every other row's come from its own message. A trailing `(#N)` — the subject GitHub writes for a squash merge — is read as a PR number too. Rebase-merged PRs leave no merge commit, so each of their commits is its own row.
+
+The default branch is resolved from local refs: `repos.<repo>.default_branch` in config, then whatever `refs/remotes/origin/HEAD` points at, then the first of `main`, `master`, `development`, `develop` that exists. Nothing is fetched, so you see what your clone already has.
+
+The window defaults to the current calendar week (`briefing.week_start`, default `monday`), except on the week-start day itself, when it shows the previous full week so the section isn't empty on a Monday morning. Any range works:
+
+```bash
+sab briefing --since 2026-09-01 --until 2026-09-07
+```
+
+Rows are computed live and capped at `briefing.landed_max_rows` (default `20`) per repo.
 
 For detached HEADs:
 
@@ -270,6 +296,7 @@ Repo Activity
 - **Shipped** — tasks whose `state_history` contains a `done` transition inside the window.
 - **Stalled** — tasks in `active` or `blocked` whose most recent state transition is **older** than 7 days.
 - **Repo Activity** — commit counts per repo across the window, regardless of context.
+- **Landed** — the same section as the daily briefing, over the weekly report's rolling 7 days. `--since`/`--until` move the Landed window only; the other sections keep their rolling window.
 
 ### Skipped footer
 

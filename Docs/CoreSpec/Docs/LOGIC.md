@@ -216,6 +216,25 @@ Notes support wiki-style links in their body content. The system must resolve th
 - If count = 0: omit this section
 - Show: title, type, linked task title if `task_id` is set
 
+### Section 8 — Repo State
+
+- Rendered for each repo linked to the active context (`--all` shows every discovered repo)
+- Show: branch (or `detached @ <sha>`), clean/dirty flag, and the repo's most recent indexed commits, capped at `briefing.repo_state_max_commits` (default `5`)
+- **Stale Branches** subsection: branches whose last commit is older than `briefing.stale_branch_days`
+- Branches matching `git.worktree_branch_patterns` (default `["worktree-agent-*"]`) are hidden from both the commit list and Stale Branches unless `--include-worktrees` is passed. The filter is display-only — those commits stay indexed and still surface under `sab task view`
+- If no repo is in scope and nothing was skipped: omit this section
+
+### Section 9 — Landed
+
+- Everything that reached each in-scope repo's **default branch** in a window: one row per first-parent commit, newest first
+- Default branch resolution, local refs only: `repos.<repo>.default_branch` in config → the target of `refs/remotes/origin/HEAD` → the first of `main`, `master`, `development`, `develop` that exists locally. A repo where none resolves is reported as skipped (`no-default-branch`)
+- Window: the current calendar week starting on `briefing.week_start` (default `monday`), or the **previous** full week when run on the week-start day. `--since`/`--until` override it
+- Each row shows short SHA, author date, PR number when the subject carries one, the subject, and the titles of tasks it resolves to. A merge takes its task IDs from the commits it introduced (`<merge>^1..<merge>^2`); any other commit takes them from its own message. A row with no resolvable task is still shown
+- PR numbers: `Merge pull request #N …` for a merge, a trailing `(#N)` otherwise (GitHub's squash-merge subject). Rebase-merged PRs are indistinguishable from direct commits in local history and appear as individual rows
+- Capped at `briefing.landed_max_rows` (default `20`) per repo, with a `+N more` line when rows are dropped
+- Computed from git on every run and never written to the database. No fetch, no network
+- If no repo has rows and none was skipped: omit this section
+
 **Empty briefing:** If all sections after Section 2 are empty, print: `"Nothing active in <context>. Check your inbox or backlog."`
 
 ---
