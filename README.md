@@ -144,10 +144,25 @@ Point it at the directory that holds your repos by editing `~/saboteur/saboteur.
 {
     "repos_dir": "~/work/repos",
     "briefing": {
-        "stale_branch_days": 14
+        "stale_branch_days": 14,
+        "repo_state_max_commits": 5,
+        "landed_max_rows": 20,
+        "week_start": "monday"
+    },
+    "git": {
+        "worktree_branch_patterns": ["worktree-agent-*"]
+    },
+    "repos": {
+        "getwrite": { "default_branch": "main" }
     }
 }
 ```
+
+- `briefing.repo_state_max_commits` — commits shown per repo in Repo State.
+- `briefing.landed_max_rows` — rows shown per repo in the Landed section.
+- `briefing.week_start` — first day of the Landed window's calendar week.
+- `git.worktree_branch_patterns` — branch-name globs hidden from Repo State unless `sab briefing --include-worktrees` is passed.
+- `repos.<name>.default_branch` — the branch the Landed section reads for that repo, when `origin/HEAD` is wrong or unset.
 
 Paths starting with `~/` are expanded to your home directory. A typical layout:
 

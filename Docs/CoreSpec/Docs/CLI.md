@@ -438,6 +438,22 @@ Run the daily briefing for the active context. Read-only. See LOGIC.md §7 for f
 | Flag | Behavior |
 |---|---|
 | `--context <slug>` | Run briefing for a different context |
+| `--all` | Show every discovered repo in Repo State and Landed, ignoring the context's repo scope |
+| `--weekly` | Run the 7-day shipped/stalled/repo-activity report instead of the daily one |
+| `--since <YYYY-MM-DD>` | Start of the Landed window, inclusive. Defaults to the current calendar week (the previous full week when run on the week-start day) |
+| `--until <YYYY-MM-DD>` | End of the Landed window, inclusive. Requires `--since` |
+| `--include-worktrees` | Show branches matching `git.worktree_branch_patterns` in Repo State (hidden by default) |
+
+Dates are interpreted in local time. In `--weekly`, `--since`/`--until` move the
+Landed section only; the other weekly sections keep their rolling 7-day window.
+
+**Errors:**
+
+- `--until` without `--since` → `"--until requires --since."`
+- `--since` after `--until` → `"--since <a> is after --until <b>."`
+- `--since` alone, dated after today → `"--since <a> is after today."`
+- Malformed date → `"--since must be a date in YYYY-MM-DD form (got \"<v>\")."`
+- Unknown `briefing.week_start` → `"Invalid briefing.week_start \"<v>\" in config. Use one of: sunday, monday, …"`
 
 ---
 
@@ -619,6 +635,18 @@ An **unrecognised** `sab:*` directive is a warning on stderr, not an error — t
 ### Placeholders
 
 Two constructs in the template are replaced rather than reproduced: a markdown table block following a `sab:table` (its header row is kept, its empty body rows replaced), and an empty numbered list following a `sab:list`. `{{ context.name }}` and `{{ context.slug }}` are substituted inside a `sab:repeat`.
+
+---
+
+### `sab git list`
+
+List the git repos discovered under the repo roots (`repos_dir` plus `repos_dirs`), each with its checked-out branch. Repos linked to the active context are marked `*`. Bare, broken, and name-colliding repos are reported in a skipped footer. Read-only; never fetches.
+
+**Flags:**
+| Flag | Behavior |
+|---|---|
+| `--context <slug>` | Mark repos scoped to a different context |
+| `--include-worktrees` | List each repo's branches matching `git.worktree_branch_patterns` beneath its row, so leftover agent-worktree branches can be found and cleaned up. Without it the output is unchanged |
 
 ---
 
