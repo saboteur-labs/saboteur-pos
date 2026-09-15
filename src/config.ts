@@ -6,6 +6,18 @@ export interface BriefingConfig {
   stale_task_days: number;
   stale_branch_days: number;
   provider_timeout_ms: number; // Phase 2c stub — not used in Phase 1
+  landed_max_rows?: number; // per-repo row cap for the Landed section
+  repo_state_max_commits?: number; // per-repo commit cap for Repo State
+  week_start?: string; // first day of the Landed window's calendar week
+}
+
+export interface GitConfig {
+  // Branch-name globs for agent-worktree branches, hidden unless requested.
+  worktree_branch_patterns: string[];
+}
+
+export interface RepoConfig {
+  default_branch?: string;
 }
 
 export interface SourceConfig {
@@ -37,6 +49,10 @@ export interface Config {
   sources: SourceConfig[];
   standup?: StandupConfig;
   retro?: RetroConfig;
+  git?: GitConfig;
+  // Per-repo settings keyed by repo basename. Lives in config rather than on a
+  // context because one repo can be linked to several contexts.
+  repos?: Record<string, RepoConfig>;
 }
 
 const DEFAULT_STANDUP_CONFIG: StandupConfig = {
@@ -52,6 +68,11 @@ const DEFAULT_STANDUP_CONFIG: StandupConfig = {
 const DEFAULT_RETRO_CONFIG: RetroConfig = {
   project_window_days: 14,
 };
+
+const DEFAULT_LANDED_MAX_ROWS = 20;
+const DEFAULT_REPO_STATE_MAX_COMMITS = 5;
+const DEFAULT_WEEK_START = 'monday';
+const DEFAULT_WORKTREE_BRANCH_PATTERNS = ['worktree-agent-*'];
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), 'saboteur', 'saboteur.config.json');
 
@@ -96,6 +117,17 @@ export function loadConfig(configPath?: string): Config {
     if (parsed.retro === undefined) {
       parsed.retro = { ...DEFAULT_RETRO_CONFIG };
     }
+    if (parsed.briefing) {
+      parsed.briefing.landed_max_rows ??= DEFAULT_LANDED_MAX_ROWS;
+      parsed.briefing.repo_state_max_commits ??= DEFAULT_REPO_STATE_MAX_COMMITS;
+      parsed.briefing.week_start ??= DEFAULT_WEEK_START;
+    }
+    if (parsed.git === undefined) {
+      parsed.git = { worktree_branch_patterns: [...DEFAULT_WORKTREE_BRANCH_PATTERNS] };
+    } else if (parsed.git.worktree_branch_patterns === undefined) {
+      parsed.git.worktree_branch_patterns = [...DEFAULT_WORKTREE_BRANCH_PATTERNS];
+    }
+    parsed.repos ??= {};
     return parsed;
   } catch {
     process.stderr.write(
@@ -122,6 +154,9 @@ export function makeDefaultConfig(notesPath: string, dbPath: string, secretsPath
       stale_task_days: 3,
       stale_branch_days: 14,
       provider_timeout_ms: 2000,
+      landed_max_rows: DEFAULT_LANDED_MAX_ROWS,
+      repo_state_max_commits: DEFAULT_REPO_STATE_MAX_COMMITS,
+      week_start: DEFAULT_WEEK_START,
     },
     sources: [
       {
@@ -134,7 +169,31 @@ export function makeDefaultConfig(notesPath: string, dbPath: string, secretsPath
     ],
     standup: { ...DEFAULT_STANDUP_CONFIG, slot_windows: { ...DEFAULT_STANDUP_CONFIG.slot_windows } },
     retro: { ...DEFAULT_RETRO_CONFIG },
+    git: { worktree_branch_patterns: [...DEFAULT_WORKTREE_BRANCH_PATTERNS] },
+    repos: {},
   };
+}
+
+// Getters for the optional fields above. loadConfig back-fills them, but a
+// Config built in code (tests, callers) may omit them, so read through these.
+export function getLandedMaxRows(config: Config): number {
+  return config.briefing.landed_max_rows ?? DEFAULT_LANDED_MAX_ROWS;
+}
+
+export function getRepoStateMaxCommits(config: Config): number {
+  return config.briefing.repo_state_max_commits ?? DEFAULT_REPO_STATE_MAX_COMMITS;
+}
+
+export function getWeekStart(config: Config): string {
+  return config.briefing.week_start ?? DEFAULT_WEEK_START;
+}
+
+export function getWorktreeBranchPatterns(config: Config): string[] {
+  return config.git?.worktree_branch_patterns ?? DEFAULT_WORKTREE_BRANCH_PATTERNS;
+}
+
+export function getConfiguredDefaultBranch(config: Config, repoName: string): string | null {
+  return config.repos?.[repoName]?.default_branch ?? null;
 }
 
 /**

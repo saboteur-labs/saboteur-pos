@@ -2,7 +2,18 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
-import { getReposDirs, loadConfig, resolveSlotFromTime, type Config } from './config.js';
+import {
+  getConfiguredDefaultBranch,
+  getLandedMaxRows,
+  getRepoStateMaxCommits,
+  getReposDirs,
+  getWeekStart,
+  getWorktreeBranchPatterns,
+  loadConfig,
+  makeDefaultConfig,
+  resolveSlotFromTime,
+  type Config,
+} from './config.js';
 
 function cfg(over: Partial<Config>): Config {
   return {
@@ -92,6 +103,68 @@ describe('loadConfig standup/retro backfill', () => {
     } finally {
       if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('Landed and worktree config (briefing-merged-section)', () => {
+  function loadRaw(raw: Record<string, unknown>): Config {
+    const dir = mkdtempSync(join(tmpdir(), 'sab-config-test-'));
+    const path = join(dir, 'saboteur.config.json');
+    writeFileSync(path, JSON.stringify(raw), 'utf-8');
+    try {
+      return loadConfig(path);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('writes all new fields into a fresh default config', () => {
+    const fresh = makeDefaultConfig('/notes', '/db', '/secrets');
+    expect(fresh.repos).toEqual({});
+    expect(fresh.briefing.landed_max_rows).toBe(20);
+    expect(fresh.briefing.repo_state_max_commits).toBe(5);
+    expect(fresh.briefing.week_start).toBe('monday');
+    expect(fresh.git).toEqual({ worktree_branch_patterns: ['worktree-agent-*'] });
+  });
+
+  it('backfills every new field when an existing config lacks them', () => {
+    const loaded = loadRaw(cfg({}) as unknown as Record<string, unknown>);
+    expect(loaded.repos).toEqual({});
+    expect(loaded.briefing.landed_max_rows).toBe(20);
+    expect(loaded.briefing.repo_state_max_commits).toBe(5);
+    expect(loaded.briefing.week_start).toBe('monday');
+    expect(loaded.git).toEqual({ worktree_branch_patterns: ['worktree-agent-*'] });
+  });
+
+  it('keeps values that are already present', () => {
+    const raw = cfg({}) as unknown as Record<string, unknown>;
+    raw.briefing = {
+      stale_task_days: 3,
+      stale_branch_days: 14,
+      provider_timeout_ms: 2000,
+      landed_max_rows: 7,
+      week_start: 'sunday',
+    };
+    raw.git = { worktree_branch_patterns: ['agent/*'] };
+    raw.repos = { getwrite: { default_branch: 'trunk' } };
+    const loaded = loadRaw(raw);
+    expect(loaded.briefing.landed_max_rows).toBe(7);
+    expect(loaded.briefing.repo_state_max_commits).toBe(5);
+    expect(loaded.briefing.week_start).toBe('sunday');
+    expect(loaded.git?.worktree_branch_patterns).toEqual(['agent/*']);
+    expect(loaded.repos?.getwrite?.default_branch).toBe('trunk');
+  });
+
+  it('getters fall back to defaults for a config object built without the fields', () => {
+    const bare = cfg({});
+    expect(getLandedMaxRows(bare)).toBe(20);
+    expect(getRepoStateMaxCommits(bare)).toBe(5);
+    expect(getWeekStart(bare)).toBe('monday');
+    expect(getWorktreeBranchPatterns(bare)).toEqual(['worktree-agent-*']);
+    expect(getConfiguredDefaultBranch(bare, 'getwrite')).toBeNull();
+    expect(
+      getConfiguredDefaultBranch(cfg({ repos: { getwrite: { default_branch: 'trunk' } } }), 'getwrite'),
+    ).toBe('trunk');
   });
 });
 
