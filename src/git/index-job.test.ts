@@ -37,7 +37,7 @@ function seedTask(db: Database.Database, id: string): void {
   ).run(id, `Title ${id}`);
 }
 
-function configFor(reposDir: string): Config {
+function configFor(reposDir: string, worktreePatterns?: string[]): Config {
   return {
     version: '1',
     db_path: ':memory:',
@@ -46,6 +46,7 @@ function configFor(reposDir: string): Config {
     active_context: 'inbox',
     briefing: { stale_task_days: 3, stale_branch_days: 14, provider_timeout_ms: 2000 },
     sources: [],
+    git: worktreePatterns ? { worktree_branch_patterns: worktreePatterns } : undefined,
   };
 }
 
@@ -307,5 +308,41 @@ describe('indexCommits', () => {
     const result = indexCommits(db, { ...configFor(''), repos_dirs: [a, b] });
     expect(result.reposScanned).toBe(0);
     expect((db.prepare(`SELECT COUNT(*) as c FROM commits`).get() as { c: number }).c).toBe(0);
+  });
+
+  describe('worktree branch scan order (FR-16)', () => {
+    it('attributes a commit on both branch kinds to the non-worktree branch', () => {
+      seedTask(db, 'task_a1b2c3d4');
+      const repo = join(root, 'demo');
+      mkdirSync(repo);
+      git(repo, 'init -q -b main');
+      makeCommit(repo, 'a.txt', '1', 'shared work [task_a1b2c3d4]');
+      // Sorts before "main", so a naive branch order would hit it first.
+      git(repo, 'branch agent-x');
+
+      indexCommits(db, configFor(root, ['agent-*']));
+
+      const row = db.prepare(`SELECT branch FROM commits WHERE task_id = 'task_a1b2c3d4'`).get() as {
+        branch: string;
+      };
+      expect(row.branch).toBe('main');
+    });
+
+    it('still records a commit that exists only on a worktree branch', () => {
+      seedTask(db, 'task_a1b2c3d4');
+      const repo = join(root, 'demo');
+      mkdirSync(repo);
+      git(repo, 'init -q -b main');
+      makeCommit(repo, 'a.txt', '1', 'base');
+      git(repo, 'checkout -q -b worktree-agent-x');
+      makeCommit(repo, 'b.txt', '2', 'agent work [task_a1b2c3d4]');
+
+      indexCommits(db, configFor(root));
+
+      const row = db.prepare(`SELECT branch FROM commits WHERE task_id = 'task_a1b2c3d4'`).get() as {
+        branch: string;
+      };
+      expect(row.branch).toBe('worktree-agent-x');
+    });
   });
 });
