@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { attributeSubContext, pathMatches, type SubContextRule } from './globs.js';
+import { attributeSubContext, isWorktreeBranch, pathMatches, type SubContextRule } from './globs.js';
 
 describe('pathMatches', () => {
   it('* stays within a path segment', () => {
@@ -57,5 +57,28 @@ describe('attributeSubContext', () => {
 
   it('returns null for an empty file set (e.g. a merge commit)', () => {
     expect(attributeSubContext([], rules)).toBeNull();
+  });
+});
+
+describe('isWorktreeBranch (FR-14)', () => {
+  const patterns = ['worktree-agent-*'];
+
+  it('matches a leftover agent branch', () => {
+    expect(isWorktreeBranch('worktree-agent-a2cf0deef802e26a3', patterns)).toBe(true);
+  });
+
+  it('does not match ordinary branches', () => {
+    expect(isWorktreeBranch('main', patterns)).toBe(false);
+    expect(isWorktreeBranch('feat/x', patterns)).toBe(false);
+  });
+
+  it('anchors the whole name', () => {
+    expect(isWorktreeBranch('worktree-agent-x-extra', ['worktree-agent-x'])).toBe(false);
+    expect(isWorktreeBranch('old-worktree-agent-x', patterns)).toBe(false);
+  });
+
+  it('matches any of several patterns, and nothing with none', () => {
+    expect(isWorktreeBranch('agent/run-1', ['worktree-agent-*', 'agent/*'])).toBe(true);
+    expect(isWorktreeBranch('worktree-agent-x', [])).toBe(false);
   });
 });

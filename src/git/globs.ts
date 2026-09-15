@@ -56,6 +56,13 @@ export function pathMatches(glob: string, rel: string): boolean {
   return base.length > 0 && globToRe(base).test(r);
 }
 
+/** True if a branch name matches any worktree-branch glob. Branch names are
+ * matched whole with `globToRe`; `pathMatches`'s directory special case doesn't
+ * apply, so `*` stays within a `/`-separated segment here too. */
+export function isWorktreeBranch(branch: string, patterns: string[]): boolean {
+  return patterns.some((p) => globToRe(p).test(branch));
+}
+
 /** Length of the literal prefix before the first wildcard — a rule's
  * specificity. `apps/web/**` (8) beats `**` (0), so the deeper rule wins. */
 function literalPrefixLen(glob: string): number {
