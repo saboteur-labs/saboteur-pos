@@ -3,7 +3,15 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { getBranch, getHeadState, getRecentCommits, isDirty } from './read.js';
+import {
+  getBranch,
+  getFirstParentLog,
+  getHeadState,
+  getMergeRangeBodies,
+  getOriginHeadTarget,
+  getRecentCommits,
+  isDirty,
+} from './read.js';
 
 const GIT_ENV = '-c user.email=test@test -c user.name=Test';
 
@@ -11,10 +19,11 @@ function git(cwd: string, args: string): string {
   return execSync(`git ${GIT_ENV} ${args}`, { cwd, encoding: 'utf-8' });
 }
 
-function makeCommit(cwd: string, file: string, content: string, message: string): void {
+function makeCommit(cwd: string, file: string, content: string, message: string, dateIso?: string): void {
   writeFileSync(join(cwd, file), content);
   git(cwd, `add ${file}`);
-  git(cwd, `commit -q -m "${message}"`);
+  const env = dateIso ? { ...process.env, GIT_AUTHOR_DATE: dateIso, GIT_COMMITTER_DATE: dateIso } : process.env;
+  execSync(`git ${GIT_ENV} commit -q -m "${message}"`, { cwd, env });
 }
 
 describe('git read primitives', () => {
@@ -117,6 +126,78 @@ describe('git read primitives', () => {
       const commits = getRecentCommits(repo, 1);
       expect(commits[0].message).toContain('subject');
       expect(commits[0].message).toContain('body line');
+    });
+  });
+  describe('getOriginHeadTarget', () => {
+    it('returns the branch origin/HEAD points at', () => {
+      makeCommit(repo, 'a.txt', '1', 'initial');
+      git(repo, 'update-ref refs/remotes/origin/development HEAD');
+      git(repo, 'symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/development');
+      expect(getOriginHeadTarget(repo)).toBe('development');
+    });
+
+    it('returns null when origin/HEAD is unset', () => {
+      makeCommit(repo, 'a.txt', '1', 'initial');
+      expect(getOriginHeadTarget(repo)).toBeNull();
+    });
+  });
+
+  describe('getFirstParentLog and getMergeRangeBodies', () => {
+    const at = (day: number) => `2026-09-${String(day).padStart(2, '0')}T12:00:00+00:00`;
+
+    beforeEach(() => {
+      makeCommit(repo, 'a.txt', '1', 'old direct commit', at(1));
+      makeCommit(repo, 'b.txt', '2', 'direct commit [task_aaaaaaaa]', at(10));
+      git(repo, 'checkout -q -b feat/x');
+      makeCommit(repo, 'c.txt', '3', 'feature part one [task_bbbbbbbb]', at(11));
+      makeCommit(repo, 'd.txt', '4', 'feature part two [task_cccccccc]', at(12));
+      git(repo, 'checkout -q main');
+      execSync(`git ${GIT_ENV} merge -q --no-ff feat/x -m "Merge pull request #7 from org/feat/x"`, {
+        cwd: repo,
+        env: { ...process.env, GIT_AUTHOR_DATE: at(13), GIT_COMMITTER_DATE: at(13) },
+      });
+    });
+
+    it('lists first-parent commits in the window, newest first, flagging merges', () => {
+      const log = getFirstParentLog(repo, 'main', new Date(at(5)), new Date(at(20)));
+      expect(log.map((e) => e.subject)).toEqual([
+        'Merge pull request #7 from org/feat/x',
+        'direct commit [task_aaaaaaaa]',
+      ]);
+      expect(log[0].isMerge).toBe(true);
+      expect(log[1].isMerge).toBe(false);
+      expect(log[1].message).toContain('[task_aaaaaaaa]');
+      expect(log[0].sha).toMatch(/^[0-9a-f]{40}$/);
+      expect(log[0].author_ts.startsWith('2026-09-13')).toBe(true);
+    });
+
+    it('excludes commits authored at or after the window end', () => {
+      const log = getFirstParentLog(repo, 'main', new Date(at(5)), new Date(at(13)));
+      expect(log.map((e) => e.subject)).toEqual(['direct commit [task_aaaaaaaa]']);
+    });
+
+    it('finds in-window commits behind a newer commit authored outside it', () => {
+      // A backdated HEAD would prune a `--since` walk before reaching the
+      // commits the window is about.
+      makeCommit(repo, 'z.txt', '9', 'backdated head', at(2));
+      const log = getFirstParentLog(repo, 'main', new Date(at(5)), new Date(at(20)));
+      expect(log.map((e) => e.subject)).toEqual([
+        'Merge pull request #7 from org/feat/x',
+        'direct commit [task_aaaaaaaa]',
+      ]);
+    });
+
+    it('returns an empty list for an unknown ref', () => {
+      expect(getFirstParentLog(repo, 'nope', new Date(at(1)), new Date(at(20)))).toEqual([]);
+    });
+
+    it('returns the messages a merge brought in via its second parent', () => {
+      const [merge] = getFirstParentLog(repo, 'main', new Date(at(5)), new Date(at(20)));
+      const bodies = getMergeRangeBodies(repo, merge.sha);
+      expect(bodies).toHaveLength(2);
+      expect(bodies.join('\n')).toContain('[task_bbbbbbbb]');
+      expect(bodies.join('\n')).toContain('[task_cccccccc]');
+      expect(bodies.join('\n')).not.toContain('[task_aaaaaaaa]');
     });
   });
 });

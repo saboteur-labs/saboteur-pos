@@ -163,6 +163,82 @@ export function getChangedFilesByCommit(repoPath: string, sinceIso: string): Map
   return result;
 }
 
+/** Branch name `refs/remotes/origin/HEAD` points at (`origin/main` → `main`),
+ * or null when it is unset. Reads a local ref; never contacts the remote. */
+export function getOriginHeadTarget(repoPath: string): string | null {
+  const out = gitRunSafe(repoPath, ['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD']);
+  if (out === null) return null;
+  const target = out.trim();
+  if (!target.startsWith('origin/')) return null;
+  return target.slice('origin/'.length) || null;
+}
+
+export interface FirstParentEntry extends Commit {
+  subject: string;
+  isMerge: boolean;
+}
+
+/** How far back along first-parent history a window scan looks. Bounds the
+ * read on a large repo; a window older than this many landings is truncated. */
+const FIRST_PARENT_SCAN_LIMIT = 1000;
+
+/**
+ * First-parent history of `ref` whose author date falls in [start, end),
+ * newest first.
+ *
+ * The window is applied here rather than with `--since`/`--until`: git's date
+ * limits prune the walk at the first commit older than the bound, so a repo
+ * whose newest first-parent commit predates the window (out-of-order author
+ * dates after a rebase or a backdated commit) would report nothing. Walking a
+ * bounded number of commits and filtering by author date is exact instead.
+ */
+export function getFirstParentLog(
+  repoPath: string,
+  ref: string,
+  start: Date,
+  end: Date,
+): FirstParentEntry[] {
+  const format = `%H${FIELD}%aI${FIELD}%P${FIELD}%B${RECORD}`;
+  const out = gitRunSafe(repoPath, [
+    'log',
+    '--first-parent',
+    '-n',
+    String(FIRST_PARENT_SCAN_LIMIT),
+    `--format=${format}`,
+    ref,
+    '--',
+  ]);
+  if (out === null || out.length === 0) return [];
+
+  const entries: FirstParentEntry[] = [];
+  for (const record of out.split(RECORD)) {
+    const fields = record.replace(/^\n+/, '').split(FIELD);
+    if (fields.length < 4) continue;
+    const [sha, author_ts, parents, ...rest] = fields;
+    const message = rest.join(FIELD).replace(/\n+$/, '');
+    const authored = new Date(author_ts).getTime();
+    if (authored < start.getTime() || authored >= end.getTime()) continue;
+    entries.push({
+      sha,
+      author_ts,
+      message,
+      subject: message.split('\n')[0],
+      isMerge: parents.trim().split(/\s+/).length > 1,
+    });
+  }
+  return entries;
+}
+
+/** Full messages of the commits a merge brought in (`<merge>^1..<merge>^2`). */
+export function getMergeRangeBodies(repoPath: string, mergeSha: string): string[] {
+  const out = gitRunSafe(repoPath, ['log', `--format=%B${RECORD}`, `${mergeSha}^1..${mergeSha}^2`]);
+  if (out === null) return [];
+  return out
+    .split(RECORD)
+    .map((r) => r.replace(/^\n+/, '').replace(/\n+$/, ''))
+    .filter((r) => r.length > 0);
+}
+
 export function getBranchLastActivity(repoPath: string, branch: string): string | null {
   const out = gitRunSafe(repoPath, ['log', '-1', '--format=%aI', branch]);
   if (out === null) return null;
