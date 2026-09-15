@@ -1,13 +1,21 @@
-import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../../config.js';
+import {
+  DEFAULT_CONFIG_PATH,
+  getReposDirs,
+  getWorktreeBranchPatterns,
+  loadConfig,
+  resolvePath,
+} from '../../config.js';
 import { getDb } from '../../db/index.js';
 import { getContext, repoNames } from '../../db/contexts.js';
 import { collisionWarning, discoverAllRepos } from '../../git/discover.js';
-import { getHeadState } from '../../git/read.js';
+import { isWorktreeBranch } from '../../git/globs.js';
+import { getHeadState, listBranches } from '../../git/read.js';
 import { c } from '../../colors.js';
 
 interface GitListOptions {
   context?: string;
   config?: string;
+  includeWorktrees?: boolean;
 }
 
 export function runGitList(options: GitListOptions): void {
@@ -51,6 +59,14 @@ export function runGitList(options: GitListOptions): void {
       process.stdout.write(
         `${marker} ${c.cyan(repo.name.padEnd(maxName))}  ${branchLabel}\n`,
       );
+      // Leftover agent-worktree branches are listed only on request, so they
+      // can be found and cleaned up without cluttering the default view.
+      if (options.includeWorktrees) {
+        const patterns = getWorktreeBranchPatterns(config);
+        for (const branch of listBranches(repo.path).filter((b) => isWorktreeBranch(b, patterns))) {
+          process.stdout.write(`    ${c.muted(branch)}\n`);
+        }
+      }
     }
   } else {
     process.stdout.write(c.muted('  (no working repos)\n'));

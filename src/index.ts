@@ -364,6 +364,7 @@ gitCmd
   .command('list')
   .description('List valid repos under repos_dir with their current branches')
   .option('--context <slug>', 'Mark repos scoped to a different context')
+  .option('--include-worktrees', 'Also list worktree-agent branches under each repo')
   .option('--config <path>', 'Path to config file')
   .action((options) => runGitList(options));
 
