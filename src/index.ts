@@ -306,6 +306,9 @@ program
   .option('--context <slug>', 'Run briefing for a different context')
   .option('--all', 'Show all repos under repos_dir, ignoring the context scope')
   .option('--weekly', 'Run the weekly briefing instead of the daily one')
+  .option('--since <date>', 'Landed window start, YYYY-MM-DD inclusive (default: this week)')
+  .option('--until <date>', 'Landed window end, YYYY-MM-DD inclusive (requires --since)')
+  .option('--include-worktrees', 'Show worktree-agent branches in Repo State')
   .option('--config <path>', 'Path to config file')
   .action((options) => runBriefing(options));
 

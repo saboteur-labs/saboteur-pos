@@ -1,12 +1,28 @@
-import { DEFAULT_CONFIG_PATH, getReposDirs, loadConfig, resolvePath } from '../config.js';
+import {
+  DEFAULT_CONFIG_PATH,
+  getRepoStateMaxCommits,
+  getReposDirs,
+  getWeekStart,
+  getWorktreeBranchPatterns,
+  loadConfig,
+  resolvePath,
+} from '../config.js';
+import { formatWindow, resolveWindow, type DateWindow } from '../briefing/window.js';
 import { getDb } from '../db/index.js';
 import { listTasks, getTask } from '../db/tasks.js';
 import { getContext, repoNames } from '../db/contexts.js';
 import { incrementalSync } from '../sync.js';
 import { daysSince } from '../utils.js';
 import { c, priorityBadge, energyBadge } from '../colors.js';
-import { collisionWarning, discoverAllRepos, type CollisionInfo } from '../git/discover.js';
+import {
+  collisionWarning,
+  discoverAllRepos,
+  type CollisionInfo,
+  type DiscoveredRepo,
+} from '../git/discover.js';
+import { isWorktreeBranch } from '../git/globs.js';
 import { indexCommits } from '../git/index-job.js';
+import { computeLandedRows, type LandedResult } from '../git/landed.js';
 import {
   GitTimeoutError,
   getBranchLastActivity,
@@ -23,6 +39,9 @@ interface BriefingOptions {
   config?: string;
   weekly?: boolean;
   all?: boolean;
+  since?: string;
+  until?: string;
+  includeWorktrees?: boolean;
 }
 
 const PRIORITY_ORDER = ['critical', 'high', 'normal', 'low'];
@@ -31,10 +50,24 @@ const ENERGY_ORDER = ['deep', 'shallow', 'admin'];
 export function runBriefing(options: BriefingOptions): void {
   const configPath = resolvePath(options.config ?? DEFAULT_CONFIG_PATH);
   const config = loadConfig(configPath);
+
+  // Validate window flags before touching the DB or git, so a bad flag fails
+  // fast. Weekly mode only needs a window when --since/--until are given.
+  const explicitWindow = options.since !== undefined || options.until !== undefined;
+  let landedWindow: DateWindow | null = null;
+  if (!options.weekly || explicitWindow) {
+    try {
+      landedWindow = resolveWindow(options, new Date(), getWeekStart(config));
+    } catch (err) {
+      process.stderr.write(`${(err as Error).message}\n`);
+      process.exit(1);
+    }
+  }
+
   const db = getDb(resolvePath(config.db_path));
 
   if (options.weekly) {
-    runWeeklyBriefing(db, config, options);
+    runWeeklyBriefing(db, config, options, landedWindow);
     return;
   }
 
@@ -125,7 +158,9 @@ export function runBriefing(options: BriefingOptions): void {
     activeContext,
     indexResult.timedOut,
     options.all ?? false,
+    options.includeWorktrees ?? false,
   );
+  const landed = collectLanded(db, config, activeContext, landedWindow!, options.all ?? false);
 
   db.close();
 
@@ -133,6 +168,7 @@ export function runBriefing(options: BriefingOptions): void {
   if (repoState.collisions.length > 0) {
     process.stderr.write(collisionWarning(repoState.collisions) + '\n');
   }
+  writeLandedWarnings(landed);
 
   // ── Rendering ─────────────────────────────────────────────────────────────
   const lines: string[] = [];
@@ -215,6 +251,13 @@ export function runBriefing(options: BriefingOptions): void {
     lines.push('');
   }
 
+  // Landed (omit if nothing landed and nothing was skipped)
+  const landedLines = renderLanded(landed, landedWindow!);
+  if (landedLines.length > 0) {
+    lines.push(...landedLines);
+    lines.push('');
+  }
+
   // Empty state check (all optional sections empty, only Section 2 has content)
   const hasOptionalContent =
     activeTasks.length > 0 ||
@@ -224,7 +267,8 @@ export function runBriefing(options: BriefingOptions): void {
     yesterdayNotes.length > 0 ||
     inboxTaskCount > 0 ||
     inboxNoteCount > 0 ||
-    repoStateLines.length > 0;
+    repoStateLines.length > 0 ||
+    landedLines.length > 0;
 
   if (!hasOptionalContent) {
     lines.push(c.muted(`Nothing active in ${activeContext}. Check your inbox or backlog.`));
@@ -251,12 +295,45 @@ interface SkippedRepo {
   reason: 'bare' | 'read-error' | 'timeout' | 'name-collision';
 }
 
+interface RepoScope {
+  /** Working repos in scope: linked to the context, or all with --all. */
+  inScope: DiscoveredRepo[];
+  /** Every discovered working repo, regardless of scope. */
+  working: DiscoveredRepo[];
+  nonWorking: DiscoveredRepo[];
+  showLinkHint: boolean;
+  collisions: CollisionInfo[];
+}
+
+// Repos are opt-in per context: only repos in the context's `repos` array are
+// in scope. `--all` (bypassScope) ignores the scope and takes every working repo.
+function resolveRepoScope(
+  db: ReturnType<typeof getDb>,
+  config: ReturnType<typeof loadConfig>,
+  activeContext: string,
+  bypassScope: boolean,
+): RepoScope {
+  const { repos: allDiscovered, collisions } = discoverAllRepos(getReposDirs(config));
+  const working = allDiscovered.filter((r) => r.kind === 'working');
+  const ctx = getContext(db, activeContext);
+  const scope = ctx ? repoNames(ctx) : [];
+  const allowed = new Set(scope);
+  return {
+    inScope: bypassScope ? working : working.filter((r) => allowed.has(r.name)),
+    working,
+    nonWorking: allDiscovered.filter((r) => r.kind !== 'working'),
+    showLinkHint: !bypassScope && scope.length === 0 && working.length > 0,
+    collisions,
+  };
+}
+
 function collectRepoState(
   db: ReturnType<typeof getDb>,
   config: ReturnType<typeof loadConfig>,
   activeContext: string,
   timedOutFromIndex: string[] = [],
   bypassScope = false,
+  includeWorktrees = false,
 ): {
   repos: RepoStateEntry[];
   staleBranches: StaleBranch[];
@@ -264,26 +341,18 @@ function collectRepoState(
   showLinkHint: boolean;
   collisions: CollisionInfo[];
 } {
-  const { repos: allDiscovered, collisions } = discoverAllRepos(getReposDirs(config));
-  const skipped: SkippedRepo[] = allDiscovered
-    .filter((r) => r.kind !== 'working')
-    .map((r) => ({
+  const { inScope: filtered, nonWorking, showLinkHint, collisions } = resolveRepoScope(
+    db,
+    config,
+    activeContext,
+    bypassScope,
+  );
+  const skipped: SkippedRepo[] = nonWorking.map((r) => ({
       name: r.name,
       reason:
         r.kind === 'bare' ? 'bare' : r.kind === 'collision' ? 'name-collision' : 'read-error',
     }));
   const timedOutSet = new Set(timedOutFromIndex);
-  const discovered = allDiscovered.filter((r) => r.kind === 'working');
-
-  // Repos are opt-in per context: only repos in the context's `repos` array
-  // are shown. An empty scope shows none — and, when there are repos that
-  // could be linked, a hint guiding the user to link them. `--all`
-  // (bypassScope) ignores the scope entirely and shows every working repo.
-  const ctx = getContext(db, activeContext);
-  const scope = ctx ? repoNames(ctx) : [];
-  const showLinkHint = !bypassScope && scope.length === 0 && discovered.length > 0;
-  const allowed = new Set(scope);
-  const filtered = bypassScope ? discovered : discovered.filter((r) => allowed.has(r.name));
   if (
     filtered.length === 0 &&
     skipped.length === 0 &&
@@ -296,16 +365,20 @@ function collectRepoState(
   // A commit surfaces under a context two ways: linked to a task in that
   // context (existing behavior), or — for a monorepo sub-context — path-
   // attributed to it even with no task link. LEFT JOIN so unlinked rows survive.
+  // No LIMIT: worktree-branch rows are filtered here before the cap applies.
   const commitQuery = db.prepare(
-    `SELECT c.sha, c.message, c.author_ts, t.title as task_title
+    `SELECT c.sha, c.message, c.author_ts, c.branch, t.title as task_title
        FROM commits c
        LEFT JOIN tasks t ON c.task_id = t.id
       WHERE c.repo = ?
         AND ( (c.task_id IS NOT NULL AND t.context_id = ?)
               OR c.sub_context = ? )
-      ORDER BY c.author_ts DESC
-      LIMIT 5`,
+      ORDER BY c.author_ts DESC`,
   );
+  const maxCommits = getRepoStateMaxCommits(config);
+  const worktreePatterns = includeWorktrees ? [] : getWorktreeBranchPatterns(config);
+  const hidden = (branch: string | null) =>
+    branch !== null && isWorktreeBranch(branch, worktreePatterns);
 
   const staleThresholdMs = config.briefing.stale_branch_days * 24 * 60 * 60 * 1000;
   const now = Date.now();
@@ -323,6 +396,7 @@ function collectRepoState(
         const headLabel = head.kind === 'branch' ? head.name : `detached @ ${head.sha}`;
 
         for (const branch of listBranches(repo.path)) {
+          if (hidden(branch)) continue;
           const lastActivity = getBranchLastActivity(repo.path, branch);
           if (!lastActivity) continue;
           const ageMs = now - new Date(lastActivity).getTime();
@@ -339,11 +413,12 @@ function collectRepoState(
           name: repo.name,
           headLabel,
           dirty: isDirty(repo.path),
-          commits: commitQuery.all(
-            repo.name,
-            activeContext,
-            activeContext,
-          ) as RepoStateEntry['commits'],
+          commits: (commitQuery.all(repo.name, activeContext, activeContext) as Array<
+            RepoStateEntry['commits'][number] & { branch: string | null }
+          >)
+            .filter((row) => !hidden(row.branch))
+            .slice(0, maxCommits)
+            .map(({ branch: _branch, ...row }) => row),
         });
       });
     } catch (err) {
@@ -410,6 +485,58 @@ function renderRepoState(
   return lines;
 }
 
+function collectLanded(
+  db: ReturnType<typeof getDb>,
+  config: ReturnType<typeof loadConfig>,
+  activeContext: string,
+  window: DateWindow,
+  bypassScope: boolean,
+): LandedResult[] {
+  const { inScope } = resolveRepoScope(db, config, activeContext, bypassScope);
+  const lookupTitle = (id: string) => getTask(db, id)?.title ?? null;
+  return inScope.map((repo) =>
+    computeLandedRows(repo.path, repo.name, config, window, lookupTitle, BRIEFING_GIT_TIMEOUT_MS),
+  );
+}
+
+function writeLandedWarnings(results: LandedResult[]): void {
+  for (const r of results) {
+    if (r.warning) process.stderr.write(`Warning: ${r.warning}\n`);
+  }
+}
+
+function renderLanded(results: LandedResult[], window: DateWindow): string[] {
+  const withRows = results.filter(
+    (r): r is Extract<LandedResult, { kind: 'ok' }> => r.kind === 'ok' && r.rows.length > 0,
+  );
+  const skipped = results.filter(
+    (r): r is Extract<LandedResult, { kind: 'skipped' }> => r.kind === 'skipped',
+  );
+  if (withRows.length === 0 && skipped.length === 0) return [];
+
+  const lines: string[] = [];
+  lines.push(c.label(`── Landed `) + c.muted(`(${formatWindow(window)})`) + c.label(` ─────────────────`));
+  for (const repo of withRows) {
+    lines.push(`  ${c.cyan(repo.repo)}  ${c.muted(`(${repo.defaultBranch})`)}`);
+    for (const row of repo.rows) {
+      const pr = row.prNumber !== null ? `${c.violet(`#${row.prNumber}`)}  ` : '';
+      const tasks = row.tasks.length > 0 ? `  → ${c.cyan(row.tasks.map((t) => t.title).join(', '))}` : '';
+      lines.push(`    ${c.muted(row.shortSha)}  ${c.muted(row.date)}  ${pr}${row.subject}${tasks}`);
+    }
+    if (repo.droppedCount > 0) {
+      lines.push(c.muted(`    +${repo.droppedCount} more`));
+    }
+  }
+  if (skipped.length > 0) {
+    if (withRows.length > 0) lines.push('');
+    const summary = skipped.map((s) => `${s.repo} (${s.reason})`).join(', ');
+    lines.push(
+      c.muted(`  Skipped ${skipped.length} repo${skipped.length === 1 ? '' : 's'}: ${summary}`),
+    );
+  }
+  return lines;
+}
+
 interface WeeklyTask {
   id: string;
   title: string;
@@ -421,12 +548,18 @@ function runWeeklyBriefing(
   db: ReturnType<typeof getDb>,
   config: ReturnType<typeof loadConfig>,
   options: BriefingOptions,
+  explicitLandedWindow: DateWindow | null,
 ): void {
   // Refresh git data so commit counts are current
   indexCommits(db, config);
 
   const activeContext = options.context ?? config.active_context;
-  const cutoffIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const nowDate = new Date();
+  const cutoffDate = new Date(nowDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const cutoffIso = cutoffDate.toISOString();
+  // Landed follows the weekly report's rolling window until weekly moves to
+  // calendar weeks; --since/--until move only the Landed section (FR-7).
+  const landedWindow = explicitLandedWindow ?? { start: cutoffDate, end: nowDate };
 
   const rows = db
     .prepare(
@@ -469,7 +602,10 @@ function runWeeklyBriefing(
     )
     .all(cutoffIso) as Array<{ repo: string; count: number }>;
 
+  const landed = collectLanded(db, config, activeContext, landedWindow, options.all ?? false);
+
   db.close();
+  writeLandedWarnings(landed);
 
   const lines: string[] = [];
   lines.push(
@@ -508,6 +644,12 @@ function runWeeklyBriefing(
     for (const r of repoActivity) {
       lines.push(`  ${c.cyan(r.repo.padEnd(20))}  ${r.count} commit${r.count === 1 ? '' : 's'}`);
     }
+  }
+
+  const landedLines = renderLanded(landed, landedWindow);
+  if (landedLines.length > 0) {
+    lines.push('');
+    lines.push(...landedLines);
   }
 
   process.stdout.write(lines.join('\n') + '\n');

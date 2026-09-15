@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { defaultWeekWindow } from '../src/briefing/window.js';
 import { createTestEnv, sabConfig, type TestEnv } from './helpers.js';
 
 const GIT_ENV = '-c user.email=test@test -c user.name=Test';
@@ -423,5 +424,220 @@ describe('Layer 6 — Daily Briefing', () => {
     sabConfig('briefing', env);
     const after = sabConfig(`task view ${id}`, env).stdout;
     expect(before).toBe(after);
+  });
+
+  describe('Landed section (briefing-merged-section)', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    const iso = (d: Date) => d.toISOString();
+    const ymd = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+    function datedCommit(cwd: string, file: string, message: string, when: Date): void {
+      writeFileSync(join(cwd, file), message);
+      git(cwd, `add ${file}`);
+      execSync(`git ${GIT_ENV} commit -q -m "${message.replace(/"/g, '\\"')}"`, {
+        cwd,
+        env: { ...process.env, GIT_AUTHOR_DATE: iso(when), GIT_COMMITTER_DATE: iso(when) },
+      });
+    }
+
+    function makeRepo(name: string): string {
+      const p = join(dirname(env.configPath), name);
+      mkdirSync(p);
+      git(p, 'init -q -b main');
+      return p;
+    }
+
+    function setConfig(mutate: (c: Record<string, any>) => void): void {
+      const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+      mutate(config);
+      writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+    }
+
+    it('lists what landed in the default week for linked repos only (FR-1, FR-6, FR-9)', () => {
+      const inWindow = new Date(defaultWeekWindow(new Date(), 'monday').start.getTime() + 60 * 60 * 1000);
+      const alpha = makeRepo('alpha');
+      datedCommit(alpha, 'a.txt', 'alpha landed change', inWindow);
+      const quiet = makeRepo('quiet');
+      datedCommit(quiet, 'q.txt', 'ancient history', new Date(Date.now() - 60 * DAY));
+      const unlinked = makeRepo('unlinked');
+      datedCommit(unlinked, 'u.txt', 'unlinked change', inWindow);
+      sabConfig('context repos add inbox alpha quiet', env);
+
+      const out = sabConfig('briefing', env).stdout;
+      expect(out).toContain('── Landed');
+      const landed = out.split('── Landed')[1];
+      expect(landed).toContain('alpha');
+      expect(landed).toContain('alpha landed change');
+      expect(landed).not.toContain('quiet');
+      expect(landed).not.toContain('unlinked');
+    });
+
+    it('is omitted when nothing landed in the window (FR-9)', () => {
+      const alpha = makeRepo('alpha');
+      datedCommit(alpha, 'a.txt', 'old change', new Date(Date.now() - 60 * DAY));
+      sabConfig('context repos add inbox alpha', env);
+      expect(sabConfig('briefing', env).stdout).not.toContain('── Landed');
+    });
+
+    it('shows merge PR numbers and the task titles of merged-in commits (FR-8)', () => {
+      const id = extractId(sabConfig('task add "Trash UI"', env).stdout);
+      const repo = makeRepo('alpha');
+      const now = new Date();
+      datedCommit(repo, 'a.txt', 'base', now);
+      git(repo, 'checkout -q -b feat/trash');
+      datedCommit(repo, 'b.txt', `trash view [${id}]`, now);
+      git(repo, 'checkout -q main');
+      git(repo, 'merge -q --no-ff feat/trash -m "Merge pull request #200 from org/feat/trash"');
+      sabConfig('context repos add inbox alpha', env);
+
+      const out = sabConfig(`briefing --since ${ymd(now)}`, env).stdout;
+      const landed = out.split('── Landed')[1];
+      expect(landed).toMatch(/#200\s+Merge pull request #200 from org\/feat\/trash/);
+      expect(landed).toContain('Trash UI');
+    });
+
+    it('--since/--until select any range, including past the 60-day index horizon (FR-2, FR-3)', () => {
+      const repo = makeRepo('alpha');
+      const old = new Date(Date.now() - 90 * DAY);
+      datedCommit(repo, 'a.txt', 'ninety days ago', old);
+      datedCommit(repo, 'b.txt', 'today', new Date());
+      sabConfig('context repos add inbox alpha', env);
+
+      const out = sabConfig(
+        `briefing --since ${ymd(new Date(old.getTime() - DAY))} --until ${ymd(new Date(old.getTime() + DAY))}`,
+        env,
+      ).stdout;
+      const landed = out.split('── Landed')[1];
+      expect(landed).toContain('ninety days ago');
+      expect(landed).not.toContain('today');
+    });
+
+    it('rejects invalid window flags with a non-zero exit (FR-2)', () => {
+      const untilOnly = sabConfig('briefing --until 2026-09-10', env);
+      expect(untilOnly.code).not.toBe(0);
+      expect(untilOnly.stderr).toContain('--until requires --since');
+      const reversed = sabConfig('briefing --since 2026-09-10 --until 2026-09-01', env);
+      expect(reversed.code).not.toBe(0);
+      expect(reversed.stderr).toContain('is after --until');
+    });
+
+    it('rejects an unrecognised week_start (FR-1)', () => {
+      setConfig((c) => { c.briefing.week_start = 'someday'; });
+      const r = sabConfig('briefing', env);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain('briefing.week_start');
+    });
+
+    it('caps rows per repo and reports the remainder (FR-9)', () => {
+      setConfig((c) => { c.briefing.landed_max_rows = 2; });
+      const repo = makeRepo('alpha');
+      for (let i = 0; i < 4; i += 1) datedCommit(repo, `f${i}.txt`, `change ${i}`, new Date());
+      sabConfig('context repos add inbox alpha', env);
+      const landed = sabConfig(`briefing --since ${ymd(new Date())}`, env).stdout.split('── Landed')[1];
+      expect(landed).toContain('change 3');
+      expect(landed).toContain('change 2');
+      expect(landed).not.toContain('change 1');
+      expect(landed).toContain('+2 more');
+    });
+
+    it('uses the configured default branch and warns when it is missing (FR-4)', () => {
+      const repo = makeRepo('alpha');
+      datedCommit(repo, 'a.txt', 'on main', new Date());
+      git(repo, 'checkout -q -b trunk');
+      datedCommit(repo, 'b.txt', 'only on trunk', new Date());
+      git(repo, 'checkout -q main');
+      sabConfig('context repos add inbox alpha', env);
+
+      setConfig((c) => { c.repos = { alpha: { default_branch: 'trunk' } }; });
+      const onTrunk = sabConfig(`briefing --since ${ymd(new Date())}`, env);
+      expect(onTrunk.stdout.split('── Landed')[1]).toContain('only on trunk');
+
+      setConfig((c) => { c.repos = { alpha: { default_branch: 'nope' } }; });
+      const fallback = sabConfig(`briefing --since ${ymd(new Date())}`, env);
+      expect(fallback.stderr).toContain('"nope" does not exist locally');
+      expect(fallback.stdout.split('── Landed')[1]).not.toContain('only on trunk');
+    });
+
+    it('reports a repo with no resolvable default branch as skipped (FR-4)', () => {
+      const repo = makeRepo('alpha');
+      git(repo, 'checkout -q -b feat/only');
+      datedCommit(repo, 'a.txt', 'feature work', new Date());
+      sabConfig('context repos add inbox alpha', env);
+      const out = sabConfig(`briefing --since ${ymd(new Date())}`, env).stdout;
+      expect(out.split('── Landed')[1]).toContain('alpha (no-default-branch)');
+    });
+
+    it('--all lists every discovered repo regardless of links (FR-6)', () => {
+      const repo = makeRepo('unlinked');
+      datedCommit(repo, 'a.txt', 'unlinked change', new Date());
+      const out = sabConfig(`briefing --all --since ${ymd(new Date())}`, env).stdout;
+      expect(out.split('── Landed')[1]).toContain('unlinked change');
+    });
+
+    it('--weekly includes Landed over its rolling window; --since/--until move only Landed (FR-7)', () => {
+      const repo = makeRepo('alpha');
+      datedCommit(repo, 'a.txt', 'three days ago', new Date(Date.now() - 3 * DAY));
+      datedCommit(repo, 'b.txt', 'twenty days ago', new Date(Date.now() - 20 * DAY));
+      sabConfig('context repos add inbox alpha', env);
+
+      const weekly = sabConfig('briefing --weekly', env).stdout;
+      expect(weekly).toContain('Landed');
+      expect(weekly).toContain('three days ago');
+      expect(weekly).not.toContain('twenty days ago');
+
+      const d = new Date(Date.now() - 20 * DAY);
+      const moved = sabConfig(`briefing --weekly --since ${ymd(d)} --until ${ymd(d)}`, env).stdout;
+      expect(moved).toContain('twenty days ago');
+      expect(moved).not.toContain('three days ago');
+      expect(moved).toContain('(last 7 days)');
+    });
+  });
+
+  describe('Repo State cap and worktree branches', () => {
+    it('reads the commit cap from briefing.repo_state_max_commits (FR-13)', () => {
+      const id = extractId(sabConfig('task add "Capped"', env).stdout);
+      const repoPath = join(dirname(env.configPath), 'demo');
+      mkdirSync(repoPath);
+      git(repoPath, 'init -q -b main');
+      for (let i = 0; i < 4; i += 1) makeCommit(repoPath, `f${i}.txt`, String(i), `cap commit ${i} [${id}]`);
+      sabConfig('context repos add inbox demo', env);
+
+      const config = JSON.parse(readFileSync(env.configPath, 'utf-8'));
+      config.briefing.repo_state_max_commits = 2;
+      writeFileSync(env.configPath, JSON.stringify(config, null, 2));
+
+      const repoState = sabConfig('briefing', env).stdout.split('── Repo State')[1].split('── Landed')[0];
+      expect(repoState.match(/cap commit \d/g)).toHaveLength(2);
+    });
+
+    it('hides worktree-agent branches from Repo State unless --include-worktrees (FR-14, FR-15)', () => {
+      const id = extractId(sabConfig('task add "Agent work"', env).stdout);
+      const repoPath = join(dirname(env.configPath), 'demo');
+      mkdirSync(repoPath);
+      git(repoPath, 'init -q -b main');
+      makeCommit(repoPath, 'a.txt', '1', 'fresh on main');
+      git(repoPath, 'checkout -q -b worktree-agent-a2cf0deef802e26a3');
+      const oldDate = new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString();
+      writeFileSync(join(repoPath, 'b.txt'), 'agent');
+      git(repoPath, 'add b.txt');
+      execSync(
+        `GIT_AUTHOR_DATE="${oldDate}" GIT_COMMITTER_DATE="${oldDate}" git ${GIT_ENV} commit -q -m "agent-only commit [${id}]"`,
+        { cwd: repoPath },
+      );
+      git(repoPath, 'checkout -q main');
+      sabConfig('context repos add inbox demo', env);
+
+      const hidden = sabConfig('briefing', env).stdout;
+      expect(hidden).not.toContain('worktree-agent-a2cf0deef802e26a3');
+      expect(hidden).not.toContain('agent-only commit');
+
+      const shown = sabConfig('briefing --include-worktrees', env).stdout;
+      expect(shown).toContain('demo/worktree-agent-a2cf0deef802e26a3');
+      expect(shown).toContain('agent-only commit');
+
+      // FR-15: hidden from display only — still indexed and visible on the task.
+      expect(sabConfig(`task view ${id}`, env).stdout).toContain('agent-only commit');
+    });
   });
 });
